@@ -1,8 +1,8 @@
 import 'dart:math';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 
 const adminEmail = 'abeersiddiki2k18@gmail.com';
@@ -53,6 +53,7 @@ class AppFirebaseOptions {
   );
   static const projectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
   static const authDomain = String.fromEnvironment('FIREBASE_AUTH_DOMAIN');
+  static const databaseUrl = String.fromEnvironment('FIREBASE_DATABASE_URL');
   static const storageBucket = String.fromEnvironment(
     'FIREBASE_STORAGE_BUCKET',
   );
@@ -69,6 +70,7 @@ class AppFirebaseOptions {
       messagingSenderId: messagingSenderId,
       projectId: projectId,
       authDomain: authDomain.trim().isEmpty ? null : authDomain,
+      databaseURL: databaseUrl.trim().isEmpty ? null : databaseUrl,
       storageBucket: storageBucket.trim().isEmpty ? null : storageBucket,
     );
   }
@@ -149,7 +151,7 @@ class FirebaseSetupApp extends StatelessWidget {
                         ),
                         const SizedBox(height: 10),
                         const Text(
-                          'CampusLoop now uses Firebase Auth and Firestore. Run with your Firebase app values so signup, users, events, and chats can sync.',
+                          'CampusLoop now uses Firebase Auth and Realtime Database. Run with your Firebase app values so signup, users, events, and chats can sync.',
                         ),
                         if (error != null) ...[
                           const SizedBox(height: 12),
@@ -160,6 +162,7 @@ class FirebaseSetupApp extends StatelessWidget {
                         const _SetupLine(label: 'FIREBASE_PROJECT_ID'),
                         const _SetupLine(label: 'FIREBASE_APP_ID'),
                         const _SetupLine(label: 'FIREBASE_MESSAGING_SENDER_ID'),
+                        const _SetupLine(label: 'FIREBASE_DATABASE_URL'),
                         const SizedBox(height: 14),
                         const Text(
                           'Example',
@@ -171,7 +174,8 @@ class FirebaseSetupApp extends StatelessWidget {
                           '--dart-define=FIREBASE_WEB_API_KEY=AIza... '
                           '--dart-define=FIREBASE_PROJECT_ID=your-project-id '
                           '--dart-define=FIREBASE_APP_ID=1:123:web:abc '
-                          '--dart-define=FIREBASE_MESSAGING_SENDER_ID=123',
+                          '--dart-define=FIREBASE_MESSAGING_SENDER_ID=123 '
+                          '--dart-define=FIREBASE_DATABASE_URL=https://your-project-default-rtdb.firebaseio.com',
                           style: TextStyle(
                             color: Colors.grey.shade800,
                             fontFamily: 'monospace',
@@ -210,13 +214,22 @@ class _SetupLine extends StatelessWidget {
   }
 }
 
-class FirestoreService {
-  FirestoreService._();
+class RealtimeDatabaseService {
+  RealtimeDatabaseService._();
 
-  static final instance = FirestoreService._();
+  static final instance = RealtimeDatabaseService._();
 
   final FirebaseAuth auth = FirebaseAuth.instance;
-  final FirebaseFirestore db = FirebaseFirestore.instance;
+
+  FirebaseDatabase get database {
+    final url = AppFirebaseOptions.databaseUrl.trim();
+    if (url.isEmpty) {
+      return FirebaseDatabase.instance;
+    }
+    return FirebaseDatabase.instanceFor(app: Firebase.app(), databaseURL: url);
+  }
+
+  DatabaseReference get db => database.ref();
 
   bool isAdminEmail(String email) => email.trim().toLowerCase() == adminEmail;
 
@@ -252,11 +265,9 @@ class FirestoreService {
   Future<void> signOut() => auth.signOut();
 
   Future<void> ensureUserDocument(User user) async {
-    final doc = await db.collection('users').doc(user.uid).get();
-    if (doc.exists) {
-      await doc.reference.set({
-        'lastSeenAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+    final snapshot = await db.child('users/${user.uid}').get();
+    if (snapshot.exists) {
+      await snapshot.ref.update({'lastSeenAt': ServerValue.timestamp});
       return;
     }
 
@@ -277,73 +288,85 @@ class FirestoreService {
     final normalized =
         '${name.toLowerCase()} ${university.toLowerCase()} '
         '${email.toLowerCase()}';
-    return db.collection('users').doc(uid).set({
+    return db.child('users/$uid').update({
       'uid': uid,
       'name': name,
       'university': university,
       'email': email.toLowerCase(),
       'avatarSeed': uid,
       'searchText': normalized,
-      'createdAt': FieldValue.serverTimestamp(),
-      'lastSeenAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+      'createdAt': ServerValue.timestamp,
+      'lastSeenAt': ServerValue.timestamp,
+    });
   }
 
   Future<void> ensureSeedEvents() async {
-    final batch = db.batch();
     for (final event in seedEvents) {
-      final ref = db.collection('events').doc(event.id);
-      batch.set(ref, event.toSeedMap(), SetOptions(merge: true));
+      await db.child('events/${event.id}').update(event.toSeedMap());
     }
-    await batch.commit();
   }
 
   Stream<List<CampusEvent>> eventsStream() {
     return db
-        .collection('events')
-        .where('status', isEqualTo: 'approved')
-        .orderBy('startAt')
-        .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map((doc) => CampusEvent.fromDoc(doc)).toList(),
-        );
+        .child('events')
+        .orderByChild('status')
+        .equalTo('approved')
+        .onValue
+        .map((event) {
+          final events = event.snapshot.children
+              .map(
+                (child) => CampusEvent.fromSnapshot(
+                  child.key ?? '',
+                  _asMap(child.value),
+                ),
+              )
+              .toList();
+          events.sort((a, b) => a.startAt.compareTo(b.startAt));
+          return events;
+        });
   }
 
   Stream<EventReaction?> eventReactionStream(String uid, String eventId) {
-    return db
-        .collection('users')
-        .doc(uid)
-        .collection('events')
-        .doc(eventId)
-        .snapshots()
-        .map((doc) => doc.exists ? EventReaction.fromDoc(doc) : null);
+    return db.child('userEvents/$uid/$eventId').onValue.map((event) {
+      if (!event.snapshot.exists) {
+        return null;
+      }
+      return EventReaction.fromSnapshot(
+        event.snapshot.key ?? eventId,
+        _asMap(event.snapshot.value),
+      );
+    });
   }
 
   Stream<List<EventReaction>> userEventsStream(String uid) {
-    return db
-        .collection('users')
-        .doc(uid)
-        .collection('events')
-        .orderBy('updatedAt', descending: true)
-        .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map((doc) => EventReaction.fromDoc(doc)).toList(),
-        );
+    return db.child('userEvents/$uid').onValue.map((event) {
+      final reactions = event.snapshot.children
+          .map(
+            (child) => EventReaction.fromSnapshot(
+              child.key ?? '',
+              _asMap(child.value),
+            ),
+          )
+          .toList();
+      reactions.sort((a, b) => b.eventStartAt.compareTo(a.eventStartAt));
+      return reactions;
+    });
   }
 
   Stream<List<EventReaction>> publicUserEventsStream(String uid) {
-    return db
-        .collection('users')
-        .doc(uid)
-        .collection('events')
-        .where('public', isEqualTo: true)
-        .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map((doc) => EventReaction.fromDoc(doc)).toList(),
-        );
+    return db.child('userEvents/$uid').onValue.map((event) {
+      final reactions = event.snapshot.children
+          .map(
+            (child) => EventReaction.fromSnapshot(
+              child.key ?? '',
+              _asMap(child.value),
+            ),
+          )
+          .where((reaction) => reaction.isPublic)
+          .toList();
+      reactions.sort((a, b) => b.eventStartAt.compareTo(a.eventStartAt));
+      return reactions;
+    });
   }
 
   Future<void> setEventReaction({
@@ -351,42 +374,51 @@ class FirestoreService {
     required CampusEvent event,
     required EventReactionType type,
   }) async {
-    final eventRef = db.collection('events').doc(event.id);
-    final reactionRef = db
-        .collection('users')
-        .doc(user.uid)
-        .collection('events')
-        .doc(event.id);
+    final eventRef = db.child('events/${event.id}');
+    final reactionRef = db.child('userEvents/${user.uid}/${event.id}');
+    final currentReaction = await reactionRef.get();
+    final oldData = _asMap(currentReaction.value);
+    final oldType = oldData['type']?.toString();
+    final oldPublic = oldData['public'] == true;
+    final newType = oldType == type.key ? null : type.key;
 
-    await db.runTransaction((transaction) async {
-      final current = await transaction.get(reactionRef);
-      final oldType = current.data()?['type']?.toString();
-      final oldPublic = current.data()?['public'] == true;
-      final newType = oldType == type.key ? null : type.key;
+    final eventSnapshot = await eventRef.get();
+    final eventData = _asMap(eventSnapshot.value);
+    var goingCount = _asInt(eventData['goingCount']);
+    var interestedCount = _asInt(eventData['interestedCount']);
 
-      if (oldType != null) {
-        transaction.update(eventRef, {
-          '${oldType}Count': FieldValue.increment(-1),
-        });
-      }
+    if (oldType == EventReactionType.going.key) {
+      goingCount = max(0, goingCount - 1);
+    }
+    if (oldType == EventReactionType.interested.key) {
+      interestedCount = max(0, interestedCount - 1);
+    }
 
-      if (newType == null) {
-        transaction.delete(reactionRef);
-        return;
-      }
+    if (newType == EventReactionType.going.key) {
+      goingCount += 1;
+    }
+    if (newType == EventReactionType.interested.key) {
+      interestedCount += 1;
+    }
 
-      transaction.update(eventRef, {
-        '${newType}Count': FieldValue.increment(1),
-      });
-      transaction.set(reactionRef, {
-        'eventId': event.id,
-        'eventTitle': event.title,
-        'eventUniversity': event.university,
-        'eventStartAt': Timestamp.fromDate(event.startAt),
-        'type': newType,
-        'public': oldPublic,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+    await eventRef.update({
+      'goingCount': goingCount,
+      'interestedCount': interestedCount,
+    });
+
+    if (newType == null) {
+      await reactionRef.remove();
+      return;
+    }
+
+    await reactionRef.update({
+      'eventId': event.id,
+      'eventTitle': event.title,
+      'eventUniversity': event.university,
+      'eventStartAt': event.startAt.millisecondsSinceEpoch,
+      'type': newType,
+      'public': oldPublic,
+      'updatedAt': ServerValue.timestamp,
     });
   }
 
@@ -395,12 +427,7 @@ class FirestoreService {
     required String eventId,
     required bool isPublic,
   }) {
-    return db
-        .collection('users')
-        .doc(uid)
-        .collection('events')
-        .doc(eventId)
-        .set({'public': isPublic}, SetOptions(merge: true));
+    return db.child('userEvents/$uid/$eventId').update({'public': isPublic});
   }
 
   Future<void> requestEvent({
@@ -413,105 +440,91 @@ class FirestoreService {
     required DateTime startAt,
     required DateTime endAt,
   }) {
-    return db.collection('eventRequests').add({
+    return db.child('eventRequests').push().set({
       'title': title,
       'university': university,
       'category': category,
       'location': location,
       'description': description,
-      'startAt': Timestamp.fromDate(startAt),
-      'endAt': Timestamp.fromDate(endAt),
+      'startAt': startAt.millisecondsSinceEpoch,
+      'endAt': endAt.millisecondsSinceEpoch,
       'requesterUid': user.uid,
       'requesterName': user.name,
       'requesterEmail': user.email,
       'status': 'pending',
-      'createdAt': FieldValue.serverTimestamp(),
+      'createdAt': ServerValue.timestamp,
     });
   }
 
   Stream<List<EventRequest>> pendingRequestsStream() {
     return db
-        .collection('eventRequests')
-        .where('status', isEqualTo: 'pending')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map((doc) => EventRequest.fromDoc(doc)).toList(),
-        );
+        .child('eventRequests')
+        .orderByChild('status')
+        .equalTo('pending')
+        .onValue
+        .map((event) {
+          final requests = event.snapshot.children
+              .map(
+                (child) => EventRequest.fromSnapshot(
+                  child.key ?? '',
+                  _asMap(child.value),
+                ),
+              )
+              .toList();
+          requests.sort((a, b) => b.startAt.compareTo(a.startAt));
+          return requests;
+        });
   }
 
   Future<void> approveRequest(EventRequest request) async {
-    final batch = db.batch();
-    final requestRef = db.collection('eventRequests').doc(request.id);
-    final eventRef = db.collection('events').doc(request.id);
-    batch.set(eventRef, {
-      'title': request.title,
-      'university': request.university,
-      'category': request.category,
-      'location': request.location,
-      'description': request.description,
-      'startAt': Timestamp.fromDate(request.startAt),
-      'endAt': Timestamp.fromDate(request.endAt),
-      'status': 'approved',
-      'featured': false,
-      'goingCount': 0,
-      'interestedCount': 0,
-      'createdAt': FieldValue.serverTimestamp(),
-      'approvedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    batch.update(requestRef, {
-      'status': 'approved',
-      'reviewedAt': FieldValue.serverTimestamp(),
+    await db.update({
+      'events/${request.id}': {
+        'title': request.title,
+        'university': request.university,
+        'category': request.category,
+        'location': request.location,
+        'description': request.description,
+        'startAt': request.startAt.millisecondsSinceEpoch,
+        'endAt': request.endAt.millisecondsSinceEpoch,
+        'status': 'approved',
+        'featured': false,
+        'goingCount': 0,
+        'interestedCount': 0,
+        'createdAt': ServerValue.timestamp,
+        'approvedAt': ServerValue.timestamp,
+      },
+      'eventRequests/${request.id}/status': 'approved',
+      'eventRequests/${request.id}/reviewedAt': ServerValue.timestamp,
     });
-    await batch.commit();
   }
 
   Future<void> rejectRequest(EventRequest request) {
-    return db.collection('eventRequests').doc(request.id).update({
+    return db.child('eventRequests/${request.id}').update({
       'status': 'rejected',
-      'reviewedAt': FieldValue.serverTimestamp(),
+      'reviewedAt': ServerValue.timestamp,
     });
   }
 
   Stream<List<ChatMessage>> globalMessagesStream() {
     return db
-        .collection('globalMessages')
-        .orderBy('createdAt', descending: true)
-        .limit(80)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => ChatMessage.fromDoc(doc))
-              .toList()
-              .reversed
-              .toList(),
-        );
+        .child('globalMessages')
+        .orderByChild('createdAt')
+        .limitToLast(80)
+        .onValue
+        .map((event) => _messagesFromSnapshot(event.snapshot));
   }
 
   Future<void> sendGlobalMessage(UserProfile user, String text) {
-    return _sendMessage(
-      db.collection('globalMessages'),
-      user: user,
-      text: text,
-    );
+    return _sendMessage(db.child('globalMessages'), user: user, text: text);
   }
 
   Stream<List<ChatMessage>> eventMessagesStream(String eventId) {
     return db
-        .collection('eventChats')
-        .doc(eventId)
-        .collection('messages')
-        .orderBy('createdAt', descending: true)
-        .limit(80)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => ChatMessage.fromDoc(doc))
-              .toList()
-              .reversed
-              .toList(),
-        );
+        .child('eventChats/$eventId/messages')
+        .orderByChild('createdAt')
+        .limitToLast(80)
+        .onValue
+        .map((event) => _messagesFromSnapshot(event.snapshot));
   }
 
   Future<void> sendEventMessage({
@@ -522,34 +535,41 @@ class FirestoreService {
     if (event.chatClosed) {
       throw Exception('This event chat is closed.');
     }
-    final chatRef = db.collection('eventChats').doc(event.id);
-    await chatRef.set({
+    final chatRef = db.child('eventChats/${event.id}');
+    await chatRef.update({
       'eventId': event.id,
       'eventTitle': event.title,
-      'expiresAt': Timestamp.fromDate(event.endAt.add(const Duration(days: 3))),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await _sendMessage(chatRef.collection('messages'), user: user, text: text);
+      'expiresAt': event.endAt
+          .add(const Duration(days: 3))
+          .millisecondsSinceEpoch,
+      'updatedAt': ServerValue.timestamp,
+    });
+    await _sendMessage(chatRef.child('messages'), user: user, text: text);
   }
 
   Stream<List<UserProfile>> usersStream() {
-    return db
-        .collection('users')
-        .orderBy('name')
-        .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map((doc) => UserProfile.fromDoc(doc)).toList(),
-        );
+    return db.child('users').orderByChild('name').onValue.map((event) {
+      final users = event.snapshot.children
+          .map(
+            (child) =>
+                UserProfile.fromSnapshot(child.key ?? '', _asMap(child.value)),
+          )
+          .toList();
+      users.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
+      return users;
+    });
   }
 
   Stream<Set<String>> followingIdsStream(String uid) {
     return db
-        .collection('users')
-        .doc(uid)
-        .collection('following')
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => doc.id).toSet());
+        .child('following/$uid')
+        .onValue
+        .map(
+          (event) =>
+              event.snapshot.children.map((child) => child.key ?? '').toSet(),
+        );
   }
 
   Future<void> toggleFollow({
@@ -557,40 +577,23 @@ class FirestoreService {
     required String otherUid,
     required bool currentlyFollowing,
   }) {
-    final ref = db
-        .collection('users')
-        .doc(currentUid)
-        .collection('following')
-        .doc(otherUid);
+    final ref = db.child('following/$currentUid/$otherUid');
     if (currentlyFollowing) {
-      return ref.delete();
+      return ref.remove();
     }
-    return ref.set({'createdAt': FieldValue.serverTimestamp()});
+    return ref.set({'createdAt': ServerValue.timestamp});
   }
 
   Stream<bool> followsStream(String fromUid, String toUid) {
     return db
-        .collection('users')
-        .doc(fromUid)
-        .collection('following')
-        .doc(toUid)
-        .snapshots()
-        .map((doc) => doc.exists);
+        .child('following/$fromUid/$toUid')
+        .onValue
+        .map((event) => event.snapshot.exists);
   }
 
   Future<bool> mutualFollow(String uid, String otherUid) async {
-    final mine = await db
-        .collection('users')
-        .doc(uid)
-        .collection('following')
-        .doc(otherUid)
-        .get();
-    final theirs = await db
-        .collection('users')
-        .doc(otherUid)
-        .collection('following')
-        .doc(uid)
-        .get();
+    final mine = await db.child('following/$uid/$otherUid').get();
+    final theirs = await db.child('following/$otherUid/$uid').get();
     return mine.exists && theirs.exists;
   }
 
@@ -605,19 +608,11 @@ class FirestoreService {
   ) {
     final chatId = privateChatId(currentUid, otherUid);
     return db
-        .collection('privateChats')
-        .doc(chatId)
-        .collection('messages')
-        .orderBy('createdAt', descending: true)
-        .limit(80)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => ChatMessage.fromDoc(doc))
-              .toList()
-              .reversed
-              .toList(),
-        );
+        .child('privateChats/$chatId/messages')
+        .orderByChild('createdAt')
+        .limitToLast(80)
+        .onValue
+        .map((event) => _messagesFromSnapshot(event.snapshot));
   }
 
   Future<void> sendPrivateMessage({
@@ -626,49 +621,66 @@ class FirestoreService {
     required String text,
   }) async {
     final chatId = privateChatId(sender.uid, recipient.uid);
-    final chatRef = db.collection('privateChats').doc(chatId);
+    final chatRef = db.child('privateChats/$chatId');
     final mutual = await mutualFollow(sender.uid, recipient.uid);
 
     if (!mutual) {
       final existingIntro = await chatRef
-          .collection('messages')
-          .where('senderId', isEqualTo: sender.uid)
-          .limit(1)
+          .child('messages')
+          .orderByChild('senderId')
+          .equalTo(sender.uid)
+          .limitToFirst(1)
           .get();
-      if (existingIntro.docs.isNotEmpty) {
+      if (existingIntro.exists) {
         throw Exception(
           'You can send one intro message. Full chat unlocks after you both follow each other.',
         );
       }
     }
 
-    await chatRef.set({
+    await chatRef.update({
       'participants': [sender.uid, recipient.uid],
       'participantNames': {
         sender.uid: sender.name,
         recipient.uid: recipient.name,
       },
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await _sendMessage(
-      chatRef.collection('messages'),
-      user: sender,
-      text: text,
-    );
+      'updatedAt': ServerValue.timestamp,
+    });
+    await _sendMessage(chatRef.child('messages'), user: sender, text: text);
   }
 
   Future<void> _sendMessage(
-    CollectionReference<Map<String, dynamic>> collection, {
+    DatabaseReference collection, {
     required UserProfile user,
     required String text,
   }) {
-    return collection.add({
+    return collection.push().set({
       'senderId': user.uid,
       'senderName': user.name,
       'senderUniversity': user.university,
       'text': text,
-      'createdAt': FieldValue.serverTimestamp(),
+      'createdAt': ServerValue.timestamp,
     });
+  }
+
+  Stream<UserProfile?> userProfileStream(String uid) {
+    return db.child('users/$uid').onValue.map((event) {
+      if (!event.snapshot.exists) {
+        return null;
+      }
+      return UserProfile.fromSnapshot(uid, _asMap(event.snapshot.value));
+    });
+  }
+
+  List<ChatMessage> _messagesFromSnapshot(DataSnapshot snapshot) {
+    final messages = snapshot.children
+        .map(
+          (child) =>
+              ChatMessage.fromSnapshot(child.key ?? '', _asMap(child.value)),
+        )
+        .toList();
+    messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return messages;
   }
 }
 
@@ -700,17 +712,16 @@ class UserProfile {
 
   bool get isAdmin => email.trim().toLowerCase() == adminEmail;
 
-  factory UserProfile.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data() ?? {};
+  factory UserProfile.fromSnapshot(String id, Map<String, dynamic> data) {
     final email = data['email']?.toString() ?? '';
     return UserProfile(
-      uid: data['uid']?.toString() ?? doc.id,
+      uid: data['uid']?.toString() ?? id,
       name: data['name']?.toString().trim().isNotEmpty == true
           ? data['name'].toString()
           : email.split('@').first,
       university: data['university']?.toString() ?? 'Campus student',
       email: email,
-      avatarSeed: data['avatarSeed']?.toString() ?? doc.id,
+      avatarSeed: data['avatarSeed']?.toString() ?? id,
     );
   }
 }
@@ -747,11 +758,10 @@ class CampusEvent {
 
   String get dateLabel => '${_formatDate(startAt)} - ${_formatDate(endAt)}';
 
-  factory CampusEvent.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data() ?? {};
+  factory CampusEvent.fromSnapshot(String id, Map<String, dynamic> data) {
     final now = DateTime.now();
     return CampusEvent(
-      id: doc.id,
+      id: id,
       title: data['title']?.toString() ?? 'Untitled event',
       university: data['university']?.toString() ?? 'Campus',
       startAt: _asDate(data['startAt'], now),
@@ -769,8 +779,8 @@ class CampusEvent {
     return {
       'title': title,
       'university': university,
-      'startAt': Timestamp.fromDate(startAt),
-      'endAt': Timestamp.fromDate(endAt),
+      'startAt': startAt.millisecondsSinceEpoch,
+      'endAt': endAt.millisecondsSinceEpoch,
       'location': location,
       'category': category,
       'description': description,
@@ -778,7 +788,7 @@ class CampusEvent {
       'interestedCount': interestedCount,
       'featured': featured,
       'status': 'approved',
-      'createdAt': FieldValue.serverTimestamp(),
+      'createdAt': ServerValue.timestamp,
     };
   }
 }
@@ -808,11 +818,10 @@ class EventRequest {
   final String requesterName;
   final String requesterEmail;
 
-  factory EventRequest.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data() ?? {};
+  factory EventRequest.fromSnapshot(String id, Map<String, dynamic> data) {
     final now = DateTime.now();
     return EventRequest(
-      id: doc.id,
+      id: id,
       title: data['title']?.toString() ?? 'Untitled request',
       university: data['university']?.toString() ?? 'Campus',
       category: data['category']?.toString() ?? 'Event',
@@ -843,12 +852,11 @@ class EventReaction {
   final EventReactionType type;
   final bool isPublic;
 
-  factory EventReaction.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data() ?? {};
+  factory EventReaction.fromSnapshot(String id, Map<String, dynamic> data) {
     final typeKey =
         data['type']?.toString() ?? EventReactionType.interested.key;
     return EventReaction(
-      eventId: data['eventId']?.toString() ?? doc.id,
+      eventId: data['eventId']?.toString() ?? id,
       eventTitle: data['eventTitle']?.toString() ?? 'Event',
       eventUniversity: data['eventUniversity']?.toString() ?? 'Campus',
       eventStartAt: _asDate(data['eventStartAt'], DateTime.now()),
@@ -878,10 +886,9 @@ class ChatMessage {
   final String text;
   final DateTime createdAt;
 
-  factory ChatMessage.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data() ?? {};
+  factory ChatMessage.fromSnapshot(String id, Map<String, dynamic> data) {
     return ChatMessage(
-      id: doc.id,
+      id: id,
       senderId: data['senderId']?.toString() ?? '',
       senderName: data['senderName']?.toString() ?? 'Student',
       senderUniversity: data['senderUniversity']?.toString() ?? 'Campus',
@@ -988,9 +995,9 @@ class _UserProfileGateState extends State<UserProfileGate> {
   @override
   void initState() {
     super.initState();
-    _bootstrap = FirestoreService.instance
+    _bootstrap = RealtimeDatabaseService.instance
         .ensureUserDocument(widget.user)
-        .then((_) => FirestoreService.instance.ensureSeedEvents());
+        .then((_) => RealtimeDatabaseService.instance.ensureSeedEvents());
   }
 
   @override
@@ -1005,19 +1012,15 @@ class _UserProfileGateState extends State<UserProfileGate> {
           return SetupErrorScreen(error: snapshot.error.toString());
         }
 
-        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('users')
-              .doc(widget.user.uid)
-              .snapshots(),
+        return StreamBuilder<UserProfile?>(
+          stream: RealtimeDatabaseService.instance.userProfileStream(
+            widget.user.uid,
+          ),
           builder: (context, userSnapshot) {
             if (!userSnapshot.hasData) {
               return const LoadingScaffold(label: 'Loading profile...');
             }
-            if (!userSnapshot.data!.exists) {
-              return const LoadingScaffold(label: 'Creating profile...');
-            }
-            return HomeScreen(profile: UserProfile.fromDoc(userSnapshot.data!));
+            return HomeScreen(profile: userSnapshot.data!);
           },
         );
       },
@@ -1107,14 +1110,14 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       if (_isSignUp) {
-        await FirestoreService.instance.signUp(
+        await RealtimeDatabaseService.instance.signUp(
           name: _nameController.text.trim(),
           university: _selectedUniversity,
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
       } else {
-        await FirestoreService.instance.signIn(
+        await RealtimeDatabaseService.instance.signIn(
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
@@ -1431,7 +1434,7 @@ class EventsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<CampusEvent>>(
-      stream: FirestoreService.instance.eventsStream(),
+      stream: RealtimeDatabaseService.instance.eventsStream(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _ErrorList(message: snapshot.error.toString());
@@ -1461,7 +1464,7 @@ class EventsTab extends StatelessWidget {
               ),
             for (final event in events)
               StreamBuilder<EventReaction?>(
-                stream: FirestoreService.instance.eventReactionStream(
+                stream: RealtimeDatabaseService.instance.eventReactionStream(
                   profile.uid,
                   event.id,
                 ),
@@ -1471,7 +1474,7 @@ class EventsTab extends StatelessWidget {
                     reaction: reactionSnapshot.data,
                     onReact: (type) async {
                       try {
-                        await FirestoreService.instance.setEventReaction(
+                        await RealtimeDatabaseService.instance.setEventReaction(
                           user: profile,
                           event: event,
                           type: type,
@@ -1752,7 +1755,10 @@ class _GlobalChatTabState extends State<GlobalChatTab> {
     }
     _controller.clear();
     try {
-      await FirestoreService.instance.sendGlobalMessage(widget.profile, text);
+      await RealtimeDatabaseService.instance.sendGlobalMessage(
+        widget.profile,
+        text,
+      );
     } catch (error) {
       if (mounted) {
         _showSnack(context, error.toString());
@@ -1764,7 +1770,7 @@ class _GlobalChatTabState extends State<GlobalChatTab> {
   Widget build(BuildContext context) {
     return ChatScaffold(
       title: 'Global campus chat',
-      stream: FirestoreService.instance.globalMessagesStream(),
+      stream: RealtimeDatabaseService.instance.globalMessagesStream(),
       currentUid: widget.profile.uid,
       controller: _controller,
       onSend: _send,
@@ -1805,7 +1811,7 @@ class _PeopleTabState extends State<PeopleTab> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<UserProfile>>(
-      stream: FirestoreService.instance.usersStream(),
+      stream: RealtimeDatabaseService.instance.usersStream(),
       builder: (context, usersSnapshot) {
         if (usersSnapshot.hasError) {
           return _ErrorList(message: usersSnapshot.error.toString());
@@ -1827,7 +1833,7 @@ class _PeopleTabState extends State<PeopleTab> {
             .toList();
 
         return StreamBuilder<Set<String>>(
-          stream: FirestoreService.instance.followingIdsStream(
+          stream: RealtimeDatabaseService.instance.followingIdsStream(
             widget.profile.uid,
           ),
           builder: (context, followingSnapshot) {
@@ -1908,7 +1914,7 @@ class UserCard extends StatelessWidget {
           children: [
             IconButton.filledTonal(
               tooltip: following ? 'Unfollow' : 'Follow',
-              onPressed: () => FirestoreService.instance.toggleFollow(
+              onPressed: () => RealtimeDatabaseService.instance.toggleFollow(
                 currentUid: currentUser.uid,
                 otherUid: user.uid,
                 currentlyFollowing: following,
@@ -1979,7 +1985,7 @@ class ProfileTab extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         FilledButton.icon(
-          onPressed: () => FirestoreService.instance.signOut(),
+          onPressed: () => RealtimeDatabaseService.instance.signOut(),
           icon: const Icon(Icons.logout_rounded),
           label: const Text('Sign out'),
         ),
@@ -1992,7 +1998,9 @@ class ProfileTab extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         StreamBuilder<List<EventReaction>>(
-          stream: FirestoreService.instance.userEventsStream(profile.uid),
+          stream: RealtimeDatabaseService.instance.userEventsStream(
+            profile.uid,
+          ),
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
               return const LoadingList(compact: true);
@@ -2050,11 +2058,12 @@ class EventPrivacyTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       child: SwitchListTile(
         value: reaction.isPublic,
-        onChanged: (value) => FirestoreService.instance.setEventReactionPublic(
-          uid: profile.uid,
-          eventId: reaction.eventId,
-          isPublic: value,
-        ),
+        onChanged: (value) =>
+            RealtimeDatabaseService.instance.setEventReactionPublic(
+              uid: profile.uid,
+              eventId: reaction.eventId,
+              isPublic: value,
+            ),
         secondary: Icon(reaction.type.icon, color: const Color(0xFF1F7A8C)),
         title: Text(
           reaction.eventTitle,
@@ -2116,7 +2125,7 @@ class PublicProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           StreamBuilder<List<EventReaction>>(
-            stream: FirestoreService.instance.publicUserEventsStream(
+            stream: RealtimeDatabaseService.instance.publicUserEventsStream(
               profile.uid,
             ),
             builder: (context, snapshot) {
@@ -2160,7 +2169,7 @@ class AdminTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<EventRequest>>(
-      stream: FirestoreService.instance.pendingRequestsStream(),
+      stream: RealtimeDatabaseService.instance.pendingRequestsStream(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _ErrorList(message: snapshot.error.toString());
@@ -2233,7 +2242,9 @@ class AdminRequestCard extends StatelessWidget {
                   child: OutlinedButton.icon(
                     onPressed: () async {
                       try {
-                        await FirestoreService.instance.rejectRequest(request);
+                        await RealtimeDatabaseService.instance.rejectRequest(
+                          request,
+                        );
                         if (context.mounted) {
                           _showSnack(context, 'Request rejected.');
                         }
@@ -2252,7 +2263,9 @@ class AdminRequestCard extends StatelessWidget {
                   child: FilledButton.icon(
                     onPressed: () async {
                       try {
-                        await FirestoreService.instance.approveRequest(request);
+                        await RealtimeDatabaseService.instance.approveRequest(
+                          request,
+                        );
                         if (context.mounted) {
                           _showSnack(context, 'Event approved.');
                         }
@@ -2322,7 +2335,7 @@ class _EventRequestSheetState extends State<EventRequestSheet> {
 
     setState(() => _saving = true);
     try {
-      await FirestoreService.instance.requestEvent(
+      await RealtimeDatabaseService.instance.requestEvent(
         user: widget.profile,
         title: _titleController.text.trim(),
         university: _university,
@@ -2481,7 +2494,7 @@ class _EventChatScreenState extends State<EventChatScreen> {
     }
     _controller.clear();
     try {
-      await FirestoreService.instance.sendEventMessage(
+      await RealtimeDatabaseService.instance.sendEventMessage(
         user: widget.profile,
         event: widget.event,
         text: text,
@@ -2500,7 +2513,9 @@ class _EventChatScreenState extends State<EventChatScreen> {
       subtitle: widget.event.chatClosed
           ? 'Closed 3 days after event end'
           : 'Group chat for people going/interested',
-      stream: FirestoreService.instance.eventMessagesStream(widget.event.id),
+      stream: RealtimeDatabaseService.instance.eventMessagesStream(
+        widget.event.id,
+      ),
       currentUid: widget.profile.uid,
       controller: _controller,
       onSend: _send,
@@ -2540,7 +2555,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     }
     _controller.clear();
     try {
-      await FirestoreService.instance.sendPrivateMessage(
+      await RealtimeDatabaseService.instance.sendPrivateMessage(
         sender: widget.currentUser,
         recipient: widget.otherUser,
         text: text,
@@ -2555,13 +2570,13 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<bool>(
-      stream: FirestoreService.instance.followsStream(
+      stream: RealtimeDatabaseService.instance.followsStream(
         widget.currentUser.uid,
         widget.otherUser.uid,
       ),
       builder: (context, mineSnapshot) {
         return StreamBuilder<bool>(
-          stream: FirestoreService.instance.followsStream(
+          stream: RealtimeDatabaseService.instance.followsStream(
             widget.otherUser.uid,
             widget.currentUser.uid,
           ),
@@ -2573,7 +2588,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
               subtitle: mutual
                   ? 'You both follow each other'
                   : 'One intro message allowed before mutual follow',
-              stream: FirestoreService.instance.privateMessagesStream(
+              stream: RealtimeDatabaseService.instance.privateMessagesStream(
                 widget.currentUser.uid,
                 widget.otherUser.uid,
               ),
@@ -2976,16 +2991,26 @@ DateTime? _parseDateInput(String value) {
 }
 
 DateTime _asDate(Object? value, DateTime fallback) {
-  if (value is Timestamp) {
-    return value.toDate();
-  }
   if (value is DateTime) {
     return value;
+  }
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+  if (value is num) {
+    return DateTime.fromMillisecondsSinceEpoch(value.toInt());
   }
   if (value is String) {
     return DateTime.tryParse(value) ?? fallback;
   }
   return fallback;
+}
+
+Map<String, dynamic> _asMap(Object? value) {
+  if (value is Map) {
+    return value.map((key, item) => MapEntry(key.toString(), item));
+  }
+  return {};
 }
 
 int _asInt(Object? value) {

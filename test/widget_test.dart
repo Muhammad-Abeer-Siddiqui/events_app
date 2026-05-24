@@ -10,5 +10,6 @@ void main() {
     expect(find.text('Firebase setup needed'), findsOneWidget);
     expect(find.text('FIREBASE_WEB_API_KEY'), findsOneWidget);
     expect(find.text('FIREBASE_PROJECT_ID'), findsOneWidget);
+    expect(find.text('FIREBASE_DATABASE_URL'), findsOneWidget);
   });
 }
