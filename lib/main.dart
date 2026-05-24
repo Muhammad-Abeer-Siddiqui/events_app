@@ -1,12 +1,77 @@
-import 'dart:convert';
+import 'dart:math';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
-const firebaseWebApiKey = String.fromEnvironment('FIREBASE_WEB_API_KEY');
+const adminEmail = 'abeersiddiki2k18@gmail.com';
 
-void main() {
-  runApp(const CampusLoopApp());
+const karachiUniversities = [
+  'University of Karachi',
+  'NED University',
+  'IBA Karachi',
+  'Habib University',
+  'FAST NUCES Karachi',
+  'SZABIST Karachi',
+  'Iqra University',
+  'Bahria University Karachi',
+  'DHA Suffa University',
+  'Sir Syed University',
+  'Dow University',
+  'Jinnah Sindh Medical University',
+  'Ziauddin University',
+  'Hamdard University Karachi',
+  'MAJU Karachi',
+  'Indus University',
+  'Greenwich University',
+  'Usman Institute of Technology',
+];
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final options = AppFirebaseOptions.currentPlatform;
+
+  if (options == null) {
+    runApp(const FirebaseSetupApp());
+    return;
+  }
+
+  try {
+    await Firebase.initializeApp(options: options);
+    runApp(const CampusLoopApp());
+  } catch (error) {
+    runApp(FirebaseSetupApp(error: error.toString()));
+  }
+}
+
+class AppFirebaseOptions {
+  static const apiKey = String.fromEnvironment('FIREBASE_WEB_API_KEY');
+  static const appId = String.fromEnvironment('FIREBASE_APP_ID');
+  static const messagingSenderId = String.fromEnvironment(
+    'FIREBASE_MESSAGING_SENDER_ID',
+  );
+  static const projectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
+  static const authDomain = String.fromEnvironment('FIREBASE_AUTH_DOMAIN');
+  static const storageBucket = String.fromEnvironment(
+    'FIREBASE_STORAGE_BUCKET',
+  );
+
+  static FirebaseOptions? get currentPlatform {
+    final requiredValues = [apiKey, appId, messagingSenderId, projectId];
+    if (requiredValues.any((value) => value.trim().isEmpty)) {
+      return null;
+    }
+
+    return FirebaseOptions(
+      apiKey: apiKey,
+      appId: appId,
+      messagingSenderId: messagingSenderId,
+      projectId: projectId,
+      authDomain: authDomain.trim().isEmpty ? null : authDomain,
+      storageBucket: storageBucket.trim().isEmpty ? null : storageBucket,
+    );
+  }
 }
 
 class CampusLoopApp extends StatelessWidget {
@@ -17,237 +82,1013 @@ class CampusLoopApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'CampusLoop',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1F7A8C),
-          brightness: Brightness.light,
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF7F8F3),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFF7F8F3),
-          foregroundColor: Color(0xFF17252A),
-          centerTitle: false,
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide.none,
-          ),
-        ),
-      ),
+      theme: campusTheme(),
       home: const AuthGate(),
     );
   }
 }
 
-class AuthGate extends StatefulWidget {
-  const AuthGate({super.key});
-
-  @override
-  State<AuthGate> createState() => _AuthGateState();
+ThemeData campusTheme() {
+  return ThemeData(
+    useMaterial3: true,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: const Color(0xFF1F7A8C),
+      brightness: Brightness.light,
+    ),
+    scaffoldBackgroundColor: const Color(0xFFF7F8F3),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Color(0xFFF7F8F3),
+      foregroundColor: Color(0xFF17252A),
+      centerTitle: false,
+    ),
+    cardTheme: CardThemeData(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide.none,
+      ),
+    ),
+  );
 }
 
-class _AuthGateState extends State<AuthGate> {
-  AuthSession? _session;
+class FirebaseSetupApp extends StatelessWidget {
+  const FirebaseSetupApp({super.key, this.error});
 
-  void _setSession(AuthSession session) {
-    setState(() {
-      _session = session;
-    });
-  }
-
-  void _signOut() {
-    setState(() {
-      _session = null;
-    });
-  }
+  final String? error;
 
   @override
   Widget build(BuildContext context) {
-    final session = _session;
-    if (session == null) {
-      return AuthScreen(onAuthenticated: _setSession);
-    }
-
-    return HomeScreen(session: session, onSignOut: _signOut);
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'CampusLoop setup',
+      theme: campusTheme(),
+      home: Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Firebase setup needed',
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'CampusLoop now uses Firebase Auth and Firestore. Run with your Firebase app values so signup, users, events, and chats can sync.',
+                        ),
+                        if (error != null) ...[
+                          const SizedBox(height: 12),
+                          _ErrorPanel(message: error!),
+                        ],
+                        const SizedBox(height: 14),
+                        const _SetupLine(label: 'FIREBASE_WEB_API_KEY'),
+                        const _SetupLine(label: 'FIREBASE_PROJECT_ID'),
+                        const _SetupLine(label: 'FIREBASE_APP_ID'),
+                        const _SetupLine(label: 'FIREBASE_MESSAGING_SENDER_ID'),
+                        const SizedBox(height: 14),
+                        const Text(
+                          'Example',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 6),
+                        SelectableText(
+                          'flutter run -d windows '
+                          '--dart-define=FIREBASE_WEB_API_KEY=AIza... '
+                          '--dart-define=FIREBASE_PROJECT_ID=your-project-id '
+                          '--dart-define=FIREBASE_APP_ID=1:123:web:abc '
+                          '--dart-define=FIREBASE_MESSAGING_SENDER_ID=123',
+                          style: TextStyle(
+                            color: Colors.grey.shade800,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
-class AuthSession {
-  const AuthSession({
-    required this.name,
-    required this.university,
-    required this.email,
-    this.idToken,
-    this.isPreview = false,
-  });
+class _SetupLine extends StatelessWidget {
+  const _SetupLine({required this.label});
 
-  final String name;
-  final String university;
-  final String email;
-  final String? idToken;
-  final bool isPreview;
-
-  String get displayName {
-    final trimmedName = name.trim();
-    if (trimmedName.isNotEmpty) {
-      return trimmedName;
-    }
-    return email.split('@').first;
-  }
-
-  String get campusLabel {
-    final trimmedUniversity = university.trim();
-    if (trimmedUniversity.isNotEmpty) {
-      return trimmedUniversity;
-    }
-    return 'Campus student';
-  }
-}
-
-class AuthFailure implements Exception {
-  const AuthFailure(this.message);
-
-  final String message;
+  final String label;
 
   @override
-  String toString() => message;
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle_outline_rounded, size: 18),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
 }
 
-class FirebaseAuthApi {
-  const FirebaseAuthApi({this.apiKey = firebaseWebApiKey});
+class FirestoreService {
+  FirestoreService._();
 
-  static const _baseUrl = 'https://identitytoolkit.googleapis.com/v1/accounts';
+  static final instance = FirestoreService._();
 
-  final String apiKey;
+  final FirebaseAuth auth = FirebaseAuth.instance;
+  final FirebaseFirestore db = FirebaseFirestore.instance;
 
-  bool get isConfigured => apiKey.trim().isNotEmpty;
+  bool isAdminEmail(String email) => email.trim().toLowerCase() == adminEmail;
 
-  Future<AuthSession> signUp({
-    required String name,
-    required String university,
-    required String email,
-    required String password,
-  }) {
-    return _authenticate(
-      endpoint: 'signUp',
-      name: name,
-      university: university,
-      email: email,
-      password: password,
-    );
-  }
-
-  Future<AuthSession> signIn({
-    required String email,
-    required String password,
-  }) {
-    return _authenticate(
-      endpoint: 'signInWithPassword',
-      name: '',
-      university: '',
-      email: email,
-      password: password,
-    );
-  }
-
-  Future<AuthSession> _authenticate({
-    required String endpoint,
+  Future<void> signUp({
     required String name,
     required String university,
     required String email,
     required String password,
   }) async {
-    if (!isConfigured) {
-      throw const AuthFailure('Firebase is not configured yet.');
+    final credential = await auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    await credential.user?.updateDisplayName(name);
+    await upsertUserProfile(
+      uid: credential.user!.uid,
+      name: name,
+      university: university,
+      email: email,
+    );
+    await ensureSeedEvents();
+  }
+
+  Future<void> signIn({required String email, required String password}) async {
+    final credential = await auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    await ensureUserDocument(credential.user!);
+    await ensureSeedEvents();
+  }
+
+  Future<void> signOut() => auth.signOut();
+
+  Future<void> ensureUserDocument(User user) async {
+    final doc = await db.collection('users').doc(user.uid).get();
+    if (doc.exists) {
+      await doc.reference.set({
+        'lastSeenAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      return;
     }
 
-    final uri = Uri.parse('$_baseUrl:$endpoint?key=$apiKey');
-    late final http.Response response;
-
-    try {
-      response = await http.post(
-        uri,
-        headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'password': password,
-          'returnSecureToken': true,
-        }),
-      );
-    } catch (_) {
-      throw const AuthFailure('Could not reach Firebase. Check your internet.');
-    }
-
-    final decoded = jsonDecode(response.body);
-    final data = decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
-
-    if (response.statusCode >= 400) {
-      throw AuthFailure(_friendlyFirebaseError(data));
-    }
-
-    final firebaseEmail = data['email']?.toString() ?? email;
-    return AuthSession(
-      name: name.trim().isEmpty ? firebaseEmail.split('@').first : name.trim(),
-      university: university.trim(),
-      email: firebaseEmail,
-      idToken: data['idToken']?.toString(),
+    await upsertUserProfile(
+      uid: user.uid,
+      name: user.displayName ?? user.email?.split('@').first ?? 'Student',
+      university: 'Campus student',
+      email: user.email ?? '',
     );
   }
 
-  String _friendlyFirebaseError(Map<String, dynamic> data) {
-    final error = data['error'];
-    final rawMessage = error is Map
-        ? error['message']?.toString() ?? 'Authentication failed.'
-        : 'Authentication failed.';
+  Future<void> upsertUserProfile({
+    required String uid,
+    required String name,
+    required String university,
+    required String email,
+  }) {
+    final normalized =
+        '${name.toLowerCase()} ${university.toLowerCase()} '
+        '${email.toLowerCase()}';
+    return db.collection('users').doc(uid).set({
+      'uid': uid,
+      'name': name,
+      'university': university,
+      'email': email.toLowerCase(),
+      'avatarSeed': uid,
+      'searchText': normalized,
+      'createdAt': FieldValue.serverTimestamp(),
+      'lastSeenAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
 
-    if (rawMessage.startsWith('WEAK_PASSWORD')) {
-      return 'Use a password with at least 6 characters.';
+  Future<void> ensureSeedEvents() async {
+    final batch = db.batch();
+    for (final event in seedEvents) {
+      final ref = db.collection('events').doc(event.id);
+      batch.set(ref, event.toSeedMap(), SetOptions(merge: true));
+    }
+    await batch.commit();
+  }
+
+  Stream<List<CampusEvent>> eventsStream() {
+    return db
+        .collection('events')
+        .where('status', isEqualTo: 'approved')
+        .orderBy('startAt')
+        .snapshots()
+        .map(
+          (snapshot) =>
+              snapshot.docs.map((doc) => CampusEvent.fromDoc(doc)).toList(),
+        );
+  }
+
+  Stream<EventReaction?> eventReactionStream(String uid, String eventId) {
+    return db
+        .collection('users')
+        .doc(uid)
+        .collection('events')
+        .doc(eventId)
+        .snapshots()
+        .map((doc) => doc.exists ? EventReaction.fromDoc(doc) : null);
+  }
+
+  Stream<List<EventReaction>> userEventsStream(String uid) {
+    return db
+        .collection('users')
+        .doc(uid)
+        .collection('events')
+        .orderBy('updatedAt', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) =>
+              snapshot.docs.map((doc) => EventReaction.fromDoc(doc)).toList(),
+        );
+  }
+
+  Stream<List<EventReaction>> publicUserEventsStream(String uid) {
+    return db
+        .collection('users')
+        .doc(uid)
+        .collection('events')
+        .where('public', isEqualTo: true)
+        .snapshots()
+        .map(
+          (snapshot) =>
+              snapshot.docs.map((doc) => EventReaction.fromDoc(doc)).toList(),
+        );
+  }
+
+  Future<void> setEventReaction({
+    required UserProfile user,
+    required CampusEvent event,
+    required EventReactionType type,
+  }) async {
+    final eventRef = db.collection('events').doc(event.id);
+    final reactionRef = db
+        .collection('users')
+        .doc(user.uid)
+        .collection('events')
+        .doc(event.id);
+
+    await db.runTransaction((transaction) async {
+      final current = await transaction.get(reactionRef);
+      final oldType = current.data()?['type']?.toString();
+      final oldPublic = current.data()?['public'] == true;
+      final newType = oldType == type.key ? null : type.key;
+
+      if (oldType != null) {
+        transaction.update(eventRef, {
+          '${oldType}Count': FieldValue.increment(-1),
+        });
+      }
+
+      if (newType == null) {
+        transaction.delete(reactionRef);
+        return;
+      }
+
+      transaction.update(eventRef, {
+        '${newType}Count': FieldValue.increment(1),
+      });
+      transaction.set(reactionRef, {
+        'eventId': event.id,
+        'eventTitle': event.title,
+        'eventUniversity': event.university,
+        'eventStartAt': Timestamp.fromDate(event.startAt),
+        'type': newType,
+        'public': oldPublic,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    });
+  }
+
+  Future<void> setEventReactionPublic({
+    required String uid,
+    required String eventId,
+    required bool isPublic,
+  }) {
+    return db
+        .collection('users')
+        .doc(uid)
+        .collection('events')
+        .doc(eventId)
+        .set({'public': isPublic}, SetOptions(merge: true));
+  }
+
+  Future<void> requestEvent({
+    required UserProfile user,
+    required String title,
+    required String university,
+    required String category,
+    required String location,
+    required String description,
+    required DateTime startAt,
+    required DateTime endAt,
+  }) {
+    return db.collection('eventRequests').add({
+      'title': title,
+      'university': university,
+      'category': category,
+      'location': location,
+      'description': description,
+      'startAt': Timestamp.fromDate(startAt),
+      'endAt': Timestamp.fromDate(endAt),
+      'requesterUid': user.uid,
+      'requesterName': user.name,
+      'requesterEmail': user.email,
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Stream<List<EventRequest>> pendingRequestsStream() {
+    return db
+        .collection('eventRequests')
+        .where('status', isEqualTo: 'pending')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) =>
+              snapshot.docs.map((doc) => EventRequest.fromDoc(doc)).toList(),
+        );
+  }
+
+  Future<void> approveRequest(EventRequest request) async {
+    final batch = db.batch();
+    final requestRef = db.collection('eventRequests').doc(request.id);
+    final eventRef = db.collection('events').doc(request.id);
+    batch.set(eventRef, {
+      'title': request.title,
+      'university': request.university,
+      'category': request.category,
+      'location': request.location,
+      'description': request.description,
+      'startAt': Timestamp.fromDate(request.startAt),
+      'endAt': Timestamp.fromDate(request.endAt),
+      'status': 'approved',
+      'featured': false,
+      'goingCount': 0,
+      'interestedCount': 0,
+      'createdAt': FieldValue.serverTimestamp(),
+      'approvedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    batch.update(requestRef, {
+      'status': 'approved',
+      'reviewedAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+  }
+
+  Future<void> rejectRequest(EventRequest request) {
+    return db.collection('eventRequests').doc(request.id).update({
+      'status': 'rejected',
+      'reviewedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Stream<List<ChatMessage>> globalMessagesStream() {
+    return db
+        .collection('globalMessages')
+        .orderBy('createdAt', descending: true)
+        .limit(80)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => ChatMessage.fromDoc(doc))
+              .toList()
+              .reversed
+              .toList(),
+        );
+  }
+
+  Future<void> sendGlobalMessage(UserProfile user, String text) {
+    return _sendMessage(
+      db.collection('globalMessages'),
+      user: user,
+      text: text,
+    );
+  }
+
+  Stream<List<ChatMessage>> eventMessagesStream(String eventId) {
+    return db
+        .collection('eventChats')
+        .doc(eventId)
+        .collection('messages')
+        .orderBy('createdAt', descending: true)
+        .limit(80)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => ChatMessage.fromDoc(doc))
+              .toList()
+              .reversed
+              .toList(),
+        );
+  }
+
+  Future<void> sendEventMessage({
+    required UserProfile user,
+    required CampusEvent event,
+    required String text,
+  }) async {
+    if (event.chatClosed) {
+      throw Exception('This event chat is closed.');
+    }
+    final chatRef = db.collection('eventChats').doc(event.id);
+    await chatRef.set({
+      'eventId': event.id,
+      'eventTitle': event.title,
+      'expiresAt': Timestamp.fromDate(event.endAt.add(const Duration(days: 3))),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await _sendMessage(chatRef.collection('messages'), user: user, text: text);
+  }
+
+  Stream<List<UserProfile>> usersStream() {
+    return db
+        .collection('users')
+        .orderBy('name')
+        .snapshots()
+        .map(
+          (snapshot) =>
+              snapshot.docs.map((doc) => UserProfile.fromDoc(doc)).toList(),
+        );
+  }
+
+  Stream<Set<String>> followingIdsStream(String uid) {
+    return db
+        .collection('users')
+        .doc(uid)
+        .collection('following')
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => doc.id).toSet());
+  }
+
+  Future<void> toggleFollow({
+    required String currentUid,
+    required String otherUid,
+    required bool currentlyFollowing,
+  }) {
+    final ref = db
+        .collection('users')
+        .doc(currentUid)
+        .collection('following')
+        .doc(otherUid);
+    if (currentlyFollowing) {
+      return ref.delete();
+    }
+    return ref.set({'createdAt': FieldValue.serverTimestamp()});
+  }
+
+  Stream<bool> followsStream(String fromUid, String toUid) {
+    return db
+        .collection('users')
+        .doc(fromUid)
+        .collection('following')
+        .doc(toUid)
+        .snapshots()
+        .map((doc) => doc.exists);
+  }
+
+  Future<bool> mutualFollow(String uid, String otherUid) async {
+    final mine = await db
+        .collection('users')
+        .doc(uid)
+        .collection('following')
+        .doc(otherUid)
+        .get();
+    final theirs = await db
+        .collection('users')
+        .doc(otherUid)
+        .collection('following')
+        .doc(uid)
+        .get();
+    return mine.exists && theirs.exists;
+  }
+
+  String privateChatId(String a, String b) {
+    final ids = [a, b]..sort();
+    return '${ids[0]}_${ids[1]}';
+  }
+
+  Stream<List<ChatMessage>> privateMessagesStream(
+    String currentUid,
+    String otherUid,
+  ) {
+    final chatId = privateChatId(currentUid, otherUid);
+    return db
+        .collection('privateChats')
+        .doc(chatId)
+        .collection('messages')
+        .orderBy('createdAt', descending: true)
+        .limit(80)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => ChatMessage.fromDoc(doc))
+              .toList()
+              .reversed
+              .toList(),
+        );
+  }
+
+  Future<void> sendPrivateMessage({
+    required UserProfile sender,
+    required UserProfile recipient,
+    required String text,
+  }) async {
+    final chatId = privateChatId(sender.uid, recipient.uid);
+    final chatRef = db.collection('privateChats').doc(chatId);
+    final mutual = await mutualFollow(sender.uid, recipient.uid);
+
+    if (!mutual) {
+      final existingIntro = await chatRef
+          .collection('messages')
+          .where('senderId', isEqualTo: sender.uid)
+          .limit(1)
+          .get();
+      if (existingIntro.docs.isNotEmpty) {
+        throw Exception(
+          'You can send one intro message. Full chat unlocks after you both follow each other.',
+        );
+      }
     }
 
-    return switch (rawMessage) {
-      'EMAIL_EXISTS' => 'An account already exists for that email.',
-      'EMAIL_NOT_FOUND' => 'No account was found for that email.',
-      'INVALID_LOGIN_CREDENTIALS' => 'Email or password is incorrect.',
-      'INVALID_PASSWORD' => 'Email or password is incorrect.',
-      'OPERATION_NOT_ALLOWED' =>
-        'Enable Email/Password sign-in in Firebase Authentication.',
-      'TOO_MANY_ATTEMPTS_TRY_LATER' =>
-        'Too many attempts. Please wait and try again.',
-      _ => rawMessage.replaceAll('_', ' ').toLowerCase(),
+    await chatRef.set({
+      'participants': [sender.uid, recipient.uid],
+      'participantNames': {
+        sender.uid: sender.name,
+        recipient.uid: recipient.name,
+      },
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await _sendMessage(
+      chatRef.collection('messages'),
+      user: sender,
+      text: text,
+    );
+  }
+
+  Future<void> _sendMessage(
+    CollectionReference<Map<String, dynamic>> collection, {
+    required UserProfile user,
+    required String text,
+  }) {
+    return collection.add({
+      'senderId': user.uid,
+      'senderName': user.name,
+      'senderUniversity': user.university,
+      'text': text,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+}
+
+enum EventReactionType {
+  going('going', 'Going', Icons.check_circle_outline_rounded),
+  interested('interested', 'Interested', Icons.star_border_rounded);
+
+  const EventReactionType(this.key, this.label, this.icon);
+
+  final String key;
+  final String label;
+  final IconData icon;
+}
+
+class UserProfile {
+  const UserProfile({
+    required this.uid,
+    required this.name,
+    required this.university,
+    required this.email,
+    required this.avatarSeed,
+  });
+
+  final String uid;
+  final String name;
+  final String university;
+  final String email;
+  final String avatarSeed;
+
+  bool get isAdmin => email.trim().toLowerCase() == adminEmail;
+
+  factory UserProfile.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? {};
+    final email = data['email']?.toString() ?? '';
+    return UserProfile(
+      uid: data['uid']?.toString() ?? doc.id,
+      name: data['name']?.toString().trim().isNotEmpty == true
+          ? data['name'].toString()
+          : email.split('@').first,
+      university: data['university']?.toString() ?? 'Campus student',
+      email: email,
+      avatarSeed: data['avatarSeed']?.toString() ?? doc.id,
+    );
+  }
+}
+
+class CampusEvent {
+  const CampusEvent({
+    required this.id,
+    required this.title,
+    required this.university,
+    required this.startAt,
+    required this.endAt,
+    required this.location,
+    required this.category,
+    required this.description,
+    required this.goingCount,
+    required this.interestedCount,
+    required this.featured,
+  });
+
+  final String id;
+  final String title;
+  final String university;
+  final DateTime startAt;
+  final DateTime endAt;
+  final String location;
+  final String category;
+  final String description;
+  final int goingCount;
+  final int interestedCount;
+  final bool featured;
+
+  bool get chatClosed =>
+      DateTime.now().isAfter(endAt.add(const Duration(days: 3)));
+
+  String get dateLabel => '${_formatDate(startAt)} - ${_formatDate(endAt)}';
+
+  factory CampusEvent.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? {};
+    final now = DateTime.now();
+    return CampusEvent(
+      id: doc.id,
+      title: data['title']?.toString() ?? 'Untitled event',
+      university: data['university']?.toString() ?? 'Campus',
+      startAt: _asDate(data['startAt'], now),
+      endAt: _asDate(data['endAt'], now.add(const Duration(hours: 2))),
+      location: data['location']?.toString() ?? 'TBA',
+      category: data['category']?.toString() ?? 'Event',
+      description: data['description']?.toString() ?? '',
+      goingCount: _asInt(data['goingCount']),
+      interestedCount: _asInt(data['interestedCount']),
+      featured: data['featured'] == true,
+    );
+  }
+
+  Map<String, dynamic> toSeedMap() {
+    return {
+      'title': title,
+      'university': university,
+      'startAt': Timestamp.fromDate(startAt),
+      'endAt': Timestamp.fromDate(endAt),
+      'location': location,
+      'category': category,
+      'description': description,
+      'goingCount': goingCount,
+      'interestedCount': interestedCount,
+      'featured': featured,
+      'status': 'approved',
+      'createdAt': FieldValue.serverTimestamp(),
     };
   }
 }
 
-class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key, required this.onAuthenticated});
+class EventRequest {
+  const EventRequest({
+    required this.id,
+    required this.title,
+    required this.university,
+    required this.category,
+    required this.location,
+    required this.description,
+    required this.startAt,
+    required this.endAt,
+    required this.requesterName,
+    required this.requesterEmail,
+  });
 
-  final ValueChanged<AuthSession> onAuthenticated;
+  final String id;
+  final String title;
+  final String university;
+  final String category;
+  final String location;
+  final String description;
+  final DateTime startAt;
+  final DateTime endAt;
+  final String requesterName;
+  final String requesterEmail;
+
+  factory EventRequest.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? {};
+    final now = DateTime.now();
+    return EventRequest(
+      id: doc.id,
+      title: data['title']?.toString() ?? 'Untitled request',
+      university: data['university']?.toString() ?? 'Campus',
+      category: data['category']?.toString() ?? 'Event',
+      location: data['location']?.toString() ?? 'TBA',
+      description: data['description']?.toString() ?? '',
+      startAt: _asDate(data['startAt'], now),
+      endAt: _asDate(data['endAt'], now.add(const Duration(hours: 2))),
+      requesterName: data['requesterName']?.toString() ?? 'Student',
+      requesterEmail: data['requesterEmail']?.toString() ?? '',
+    );
+  }
+}
+
+class EventReaction {
+  const EventReaction({
+    required this.eventId,
+    required this.eventTitle,
+    required this.eventUniversity,
+    required this.eventStartAt,
+    required this.type,
+    required this.isPublic,
+  });
+
+  final String eventId;
+  final String eventTitle;
+  final String eventUniversity;
+  final DateTime eventStartAt;
+  final EventReactionType type;
+  final bool isPublic;
+
+  factory EventReaction.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? {};
+    final typeKey =
+        data['type']?.toString() ?? EventReactionType.interested.key;
+    return EventReaction(
+      eventId: data['eventId']?.toString() ?? doc.id,
+      eventTitle: data['eventTitle']?.toString() ?? 'Event',
+      eventUniversity: data['eventUniversity']?.toString() ?? 'Campus',
+      eventStartAt: _asDate(data['eventStartAt'], DateTime.now()),
+      type: EventReactionType.values.firstWhere(
+        (type) => type.key == typeKey,
+        orElse: () => EventReactionType.interested,
+      ),
+      isPublic: data['public'] == true,
+    );
+  }
+}
+
+class ChatMessage {
+  const ChatMessage({
+    required this.id,
+    required this.senderId,
+    required this.senderName,
+    required this.senderUniversity,
+    required this.text,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String senderId;
+  final String senderName;
+  final String senderUniversity;
+  final String text;
+  final DateTime createdAt;
+
+  factory ChatMessage.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? {};
+    return ChatMessage(
+      id: doc.id,
+      senderId: data['senderId']?.toString() ?? '',
+      senderName: data['senderName']?.toString() ?? 'Student',
+      senderUniversity: data['senderUniversity']?.toString() ?? 'Campus',
+      text: data['text']?.toString() ?? '',
+      createdAt: _asDate(data['createdAt'], DateTime.now()),
+    );
+  }
+}
+
+final seedEvents = [
+  CampusEvent(
+    id: 'ai-startup-weekend',
+    title: 'AI Startup Weekend',
+    university: 'FAST NUCES Karachi',
+    startAt: DateTime(2026, 5, 23, 16),
+    endAt: DateTime(2026, 5, 23, 20),
+    location: 'Auditorium A',
+    category: 'Entrepreneurship',
+    description:
+        'Build a small AI idea, pitch it to mentors, and meet students from nearby universities.',
+    goingCount: 34,
+    interestedCount: 184,
+    featured: true,
+  ),
+  CampusEvent(
+    id: 'inter-uni-music-night',
+    title: 'Inter-Uni Music Night',
+    university: 'LUMS',
+    startAt: DateTime(2026, 5, 24, 19, 30),
+    endAt: DateTime(2026, 5, 24, 23),
+    location: 'Main Ground',
+    category: 'Social',
+    description:
+        'Open mic, student bands, food stalls, and a relaxed place to meet new people.',
+    goingCount: 112,
+    interestedCount: 420,
+    featured: true,
+  ),
+  CampusEvent(
+    id: 'women-in-tech-panel',
+    title: 'Women in Tech Panel',
+    university: 'Habib University',
+    startAt: DateTime(2026, 5, 27, 14),
+    endAt: DateTime(2026, 5, 27, 16),
+    location: 'Seminar Hall',
+    category: 'Career',
+    description:
+        'Founders and engineers discuss internships, portfolios, and first jobs.',
+    goingCount: 41,
+    interestedCount: 96,
+    featured: false,
+  ),
+  CampusEvent(
+    id: 'case-study-championship',
+    title: 'Case Study Championship',
+    university: 'IBA Karachi',
+    startAt: DateTime(2026, 5, 30, 10),
+    endAt: DateTime(2026, 5, 30, 15),
+    location: 'Business Block',
+    category: 'Competition',
+    description:
+        'Solve a real company problem in teams and pitch your solution to judges.',
+    goingCount: 58,
+    interestedCount: 132,
+    featured: false,
+  ),
+];
+
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LoadingScaffold(label: 'Checking account...');
+        }
+
+        final user = snapshot.data;
+        if (user == null) {
+          return const AuthScreen();
+        }
+
+        return UserProfileGate(user: user);
+      },
+    );
+  }
+}
+
+class UserProfileGate extends StatefulWidget {
+  const UserProfileGate({super.key, required this.user});
+
+  final User user;
+
+  @override
+  State<UserProfileGate> createState() => _UserProfileGateState();
+}
+
+class _UserProfileGateState extends State<UserProfileGate> {
+  late final Future<void> _bootstrap;
+
+  @override
+  void initState() {
+    super.initState();
+    _bootstrap = FirestoreService.instance
+        .ensureUserDocument(widget.user)
+        .then((_) => FirestoreService.instance.ensureSeedEvents());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _bootstrap,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const LoadingScaffold(label: 'Preparing CampusLoop...');
+        }
+        if (snapshot.hasError) {
+          return SetupErrorScreen(error: snapshot.error.toString());
+        }
+
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(widget.user.uid)
+              .snapshots(),
+          builder: (context, userSnapshot) {
+            if (!userSnapshot.hasData) {
+              return const LoadingScaffold(label: 'Loading profile...');
+            }
+            if (!userSnapshot.data!.exists) {
+              return const LoadingScaffold(label: 'Creating profile...');
+            }
+            return HomeScreen(profile: UserProfile.fromDoc(userSnapshot.data!));
+          },
+        );
+      },
+    );
+  }
+}
+
+class LoadingScaffold extends StatelessWidget {
+  const LoadingScaffold({super.key, required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 14),
+            Text(label),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SetupErrorScreen extends StatelessWidget {
+  const SetupErrorScreen({super.key, required this.error});
+
+  final String error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: _ErrorPanel(message: error),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AuthScreen extends StatefulWidget {
+  const AuthScreen({super.key});
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  final _authApi = const FirebaseAuthApi();
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _universityController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
   bool _isSignUp = true;
   bool _hidePassword = true;
   bool _submitting = false;
+  String _selectedUniversity = karachiUniversities.first;
   String? _error;
 
   @override
   void dispose() {
     _nameController.dispose();
-    _universityController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -264,75 +1105,29 @@ class _AuthScreenState extends State<AuthScreen> {
       _error = null;
     });
 
-    final name = _nameController.text.trim();
-    final university = _universityController.text.trim();
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-
     try {
-      final session = _authApi.isConfigured
-          ? await _firebaseSession(
-              name: name,
-              university: university,
-              email: email,
-              password: password,
-            )
-          : await _previewSession(
-              name: name,
-              university: university,
-              email: email,
-            );
-
-      if (!mounted) {
-        return;
+      if (_isSignUp) {
+        await FirestoreService.instance.signUp(
+          name: _nameController.text.trim(),
+          university: _selectedUniversity,
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+      } else {
+        await FirestoreService.instance.signIn(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
       }
-      widget.onAuthenticated(session);
+    } on FirebaseAuthException catch (error) {
+      setState(() => _error = _friendlyAuthError(error));
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _error = error.toString();
-      });
+      setState(() => _error = error.toString());
     } finally {
       if (mounted) {
-        setState(() {
-          _submitting = false;
-        });
+        setState(() => _submitting = false);
       }
     }
-  }
-
-  Future<AuthSession> _firebaseSession({
-    required String name,
-    required String university,
-    required String email,
-    required String password,
-  }) {
-    if (_isSignUp) {
-      return _authApi.signUp(
-        name: name,
-        university: university,
-        email: email,
-        password: password,
-      );
-    }
-
-    return _authApi.signIn(email: email, password: password);
-  }
-
-  Future<AuthSession> _previewSession({
-    required String name,
-    required String university,
-    required String email,
-  }) async {
-    await Future<void>.delayed(const Duration(milliseconds: 250));
-    return AuthSession(
-      name: name.trim().isEmpty ? email.split('@').first : name.trim(),
-      university: university.trim().isEmpty ? 'Campus student' : university.trim(),
-      email: email,
-      isPreview: true,
-    );
   }
 
   void _setMode(bool isSignUp) {
@@ -340,32 +1135,6 @@ class _AuthScreenState extends State<AuthScreen> {
       _isSignUp = isSignUp;
       _error = null;
     });
-  }
-
-  String? _validateRequired(String? value, String label) {
-    if (value == null || value.trim().isEmpty) {
-      return '$label is required.';
-    }
-    return null;
-  }
-
-  String? _validateEmail(String? value) {
-    final email = value?.trim() ?? '';
-    if (email.isEmpty) {
-      return 'Email is required.';
-    }
-    if (!email.contains('@') || !email.contains('.')) {
-      return 'Enter a valid email address.';
-    }
-    return null;
-  }
-
-  String? _validatePassword(String? value) {
-    final password = value ?? '';
-    if (password.length < 6) {
-      return 'Use at least 6 characters.';
-    }
-    return null;
   }
 
   @override
@@ -388,10 +1157,6 @@ class _AuthScreenState extends State<AuthScreen> {
                   const _AuthHeader(),
                   const SizedBox(height: 18),
                   Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Form(
@@ -432,15 +1197,27 @@ class _AuthScreenState extends State<AuthScreen> {
                                       _validateRequired(value, 'Name'),
                                 ),
                                 const SizedBox(height: 12),
-                                TextFormField(
-                                  controller: _universityController,
+                                DropdownButtonFormField<String>(
+                                  initialValue: _selectedUniversity,
                                   decoration: const InputDecoration(
                                     labelText: 'University',
                                     prefixIcon: Icon(Icons.school_outlined),
                                   ),
-                                  textInputAction: TextInputAction.next,
-                                  validator: (value) =>
-                                      _validateRequired(value, 'University'),
+                                  items: [
+                                    for (final university
+                                        in karachiUniversities)
+                                      DropdownMenuItem(
+                                        value: university,
+                                        child: Text(university),
+                                      ),
+                                  ],
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      setState(() {
+                                        _selectedUniversity = value;
+                                      });
+                                    }
+                                  },
                                 ),
                                 const SizedBox(height: 12),
                               ],
@@ -462,8 +1239,9 @@ class _AuthScreenState extends State<AuthScreen> {
                                   labelText: 'Password',
                                   prefixIcon: const Icon(Icons.lock_outline),
                                   suffixIcon: IconButton(
-                                    tooltip:
-                                        _hidePassword ? 'Show password' : 'Hide password',
+                                    tooltip: _hidePassword
+                                        ? 'Show password'
+                                        : 'Hide password',
                                     onPressed: () {
                                       setState(() {
                                         _hidePassword = !_hidePassword;
@@ -498,7 +1276,9 @@ class _AuthScreenState extends State<AuthScreen> {
                                         ),
                                       )
                                     : Icon(icon),
-                                label: Text(_submitting ? 'Please wait...' : buttonLabel),
+                                label: Text(
+                                  _submitting ? 'Please wait...' : buttonLabel,
+                                ),
                               ),
                             ],
                           ),
@@ -542,39 +1322,10 @@ class _AuthHeader extends StatelessWidget {
           SizedBox(height: 10),
           Text(
             'Discover university events and meet students across campus circles.',
-            style: TextStyle(color: Color(0xFFDDF5F4), fontSize: 16, height: 1.35),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ErrorPanel extends StatelessWidget {
-  const _ErrorPanel({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFE4E1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.error_outline_rounded, color: Color(0xFFB3261E)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                color: Color(0xFF6B1D18),
-                fontWeight: FontWeight.w600,
-              ),
+            style: TextStyle(
+              color: Color(0xFFDDF5F4),
+              fontSize: 16,
+              height: 1.35,
             ),
           ),
         ],
@@ -583,164 +1334,10 @@ class _ErrorPanel extends StatelessWidget {
   }
 }
 
-class CampusEvent {
-  const CampusEvent({
-    required this.title,
-    required this.university,
-    required this.date,
-    required this.location,
-    required this.category,
-    required this.description,
-    required this.attendees,
-    required this.isFeatured,
-  });
-
-  final String title;
-  final String university;
-  final String date;
-  final String location;
-  final String category;
-  final String description;
-  final int attendees;
-  final bool isFeatured;
-}
-
-class ChatMessage {
-  const ChatMessage({
-    required this.sender,
-    required this.university,
-    required this.text,
-    required this.time,
-    required this.isMe,
-  });
-
-  final String sender;
-  final String university;
-  final String text;
-  final String time;
-  final bool isMe;
-}
-
-class StudentContact {
-  const StudentContact({
-    required this.name,
-    required this.university,
-    required this.about,
-    required this.lastMessage,
-    required this.online,
-  });
-
-  final String name;
-  final String university;
-  final String about;
-  final String lastMessage;
-  final bool online;
-}
-
-const sampleEvents = [
-  CampusEvent(
-    title: 'AI Startup Weekend',
-    university: 'FAST NUCES',
-    date: 'Today, 4:00 PM',
-    location: 'Auditorium A',
-    category: 'Entrepreneurship',
-    description:
-        'Build a small AI idea, pitch it to mentors, and meet students from nearby universities.',
-    attendees: 184,
-    isFeatured: true,
-  ),
-  CampusEvent(
-    title: 'Inter-Uni Music Night',
-    university: 'LUMS',
-    date: 'Tomorrow, 7:30 PM',
-    location: 'Main Ground',
-    category: 'Social',
-    description:
-        'Open mic, student bands, food stalls, and a relaxed place to meet new people.',
-    attendees: 420,
-    isFeatured: true,
-  ),
-  CampusEvent(
-    title: 'Women in Tech Panel',
-    university: 'ITU',
-    date: 'May 27, 2:00 PM',
-    location: 'Seminar Hall',
-    category: 'Career',
-    description:
-        'Founders and engineers discuss internships, portfolios, and first jobs.',
-    attendees: 96,
-    isFeatured: false,
-  ),
-  CampusEvent(
-    title: 'Case Study Championship',
-    university: 'IBA',
-    date: 'May 30, 10:00 AM',
-    location: 'Business Block',
-    category: 'Competition',
-    description:
-        'Solve a real company problem in teams and pitch your solution to judges.',
-    attendees: 132,
-    isFeatured: false,
-  ),
-];
-
-const initialMessages = [
-  ChatMessage(
-    sender: 'Ayesha',
-    university: 'FAST NUCES',
-    text: 'Anyone going to AI Startup Weekend today?',
-    time: '3:12 PM',
-    isMe: false,
-  ),
-  ChatMessage(
-    sender: 'Hamza',
-    university: 'ITU',
-    text: 'Yes. I heard teams can be formed at the venue too.',
-    time: '3:14 PM',
-    isMe: false,
-  ),
-  ChatMessage(
-    sender: 'You',
-    university: 'UCP',
-    text: 'I am going after class. We can meet near registration.',
-    time: '3:16 PM',
-    isMe: true,
-  ),
-];
-
-const contacts = [
-  StudentContact(
-    name: 'Ayesha Khan',
-    university: 'FAST NUCES',
-    about: 'CS student, likes hackathons and startup events.',
-    lastMessage: 'See you at the entrance.',
-    online: true,
-  ),
-  StudentContact(
-    name: 'Hamza Ali',
-    university: 'ITU',
-    about: 'Design club volunteer and event photographer.',
-    lastMessage: 'I can share the schedule.',
-    online: true,
-  ),
-  StudentContact(
-    name: 'Mina Tariq',
-    university: 'LUMS',
-    about: 'Looking for debate, music, and career events.',
-    lastMessage: 'Music night sounds fun.',
-    online: false,
-  ),
-];
-
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({
-    super.key,
-    required this.session,
-    required this.onSignOut,
-  });
+  const HomeScreen({super.key, required this.profile});
 
-  final AuthSession session;
-  final VoidCallback onSignOut;
+  final UserProfile profile;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -748,61 +1345,55 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
-  final List<ChatMessage> _messages = List.of(initialMessages);
-  final TextEditingController _messageController = TextEditingController();
-  final Set<String> _interestedEvents = {'AI Startup Weekend'};
 
-  @override
-  void dispose() {
-    _messageController.dispose();
-    super.dispose();
-  }
-
-  void _sendMessage() {
-    final text = _messageController.text.trim();
-    if (text.isEmpty) {
-      return;
-    }
-
-    setState(() {
-      _messages.add(
-        ChatMessage(
-          sender: widget.session.displayName,
-          university: widget.session.campusLabel,
-          text: text,
-          time: 'Now',
-          isMe: true,
-        ),
-      );
-      _messageController.clear();
-    });
-  }
-
-  void _toggleInterest(CampusEvent event) {
-    setState(() {
-      if (_interestedEvents.contains(event.title)) {
-        _interestedEvents.remove(event.title);
-      } else {
-        _interestedEvents.add(event.title);
-      }
-    });
+  void _openEventRequest() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => EventRequestSheet(profile: widget.profile),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final pages = [
-      EventsTab(
-        interestedEvents: _interestedEvents,
-        onToggleInterest: _toggleInterest,
-      ),
-      GlobalChatTab(
-        messages: _messages,
-        controller: _messageController,
-        onSend: _sendMessage,
-      ),
-      const PeopleTab(),
-      ProfileTab(session: widget.session, onSignOut: widget.onSignOut),
+      EventsTab(profile: widget.profile),
+      GlobalChatTab(profile: widget.profile),
+      PeopleTab(profile: widget.profile),
+      ProfileTab(profile: widget.profile),
+      if (widget.profile.isAdmin) const AdminTab(),
     ];
+    final destinations = [
+      const NavigationDestination(
+        icon: Icon(Icons.event_outlined),
+        selectedIcon: Icon(Icons.event),
+        label: 'Events',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.forum_outlined),
+        selectedIcon: Icon(Icons.forum),
+        label: 'Global',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.people_alt_outlined),
+        selectedIcon: Icon(Icons.people_alt),
+        label: 'People',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.person_outline),
+        selectedIcon: Icon(Icons.person),
+        label: 'Profile',
+      ),
+      if (widget.profile.isAdmin)
+        const NavigationDestination(
+          icon: Icon(Icons.admin_panel_settings_outlined),
+          selectedIcon: Icon(Icons.admin_panel_settings),
+          label: 'Admin',
+        ),
+    ];
+
+    final safeIndex = min(_selectedIndex, pages.length - 1);
 
     return Scaffold(
       appBar: AppBar(
@@ -812,78 +1403,106 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Notifications',
-            onPressed: () {},
-            icon: const Icon(Icons.notifications_none_rounded),
+            tooltip: 'Request event listing',
+            onPressed: _openEventRequest,
+            icon: const Icon(Icons.post_add_rounded),
           ),
         ],
       ),
-      body: pages[_selectedIndex],
+      body: pages[safeIndex],
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
+        selectedIndex: safeIndex,
         onDestinationSelected: (index) {
           setState(() {
             _selectedIndex = index;
           });
         },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.event_outlined),
-            selectedIcon: Icon(Icons.event),
-            label: 'Events',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.forum_outlined),
-            selectedIcon: Icon(Icons.forum),
-            label: 'Global',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.people_alt_outlined),
-            selectedIcon: Icon(Icons.people_alt),
-            label: 'People',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
+        destinations: destinations,
       ),
     );
   }
 }
 
 class EventsTab extends StatelessWidget {
-  const EventsTab({
-    super.key,
-    required this.interestedEvents,
-    required this.onToggleInterest,
-  });
+  const EventsTab({super.key, required this.profile});
 
-  final Set<String> interestedEvents;
-  final ValueChanged<CampusEvent> onToggleInterest;
+  final UserProfile profile;
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      children: [
-        const _WelcomePanel(),
-        const SizedBox(height: 16),
-        Text(
-          'Featured now',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
+    return StreamBuilder<List<CampusEvent>>(
+      stream: FirestoreService.instance.eventsStream(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _ErrorList(message: snapshot.error.toString());
+        }
+        if (!snapshot.hasData) {
+          return const LoadingList();
+        }
+
+        final events = snapshot.data!;
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: [
+            const _WelcomePanel(),
+            const SizedBox(height: 16),
+            Text(
+              'Featured now',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            if (events.isEmpty)
+              const EmptyState(
+                icon: Icons.event_busy_rounded,
+                title: 'No approved events yet',
+                text: 'Use the top-right button to request the first listing.',
               ),
-        ),
-        const SizedBox(height: 10),
-        for (final event in sampleEvents)
-          EventCard(
-            event: event,
-            isInterested: interestedEvents.contains(event.title),
-            onToggleInterest: () => onToggleInterest(event),
-          ),
-      ],
+            for (final event in events)
+              StreamBuilder<EventReaction?>(
+                stream: FirestoreService.instance.eventReactionStream(
+                  profile.uid,
+                  event.id,
+                ),
+                builder: (context, reactionSnapshot) {
+                  return EventCard(
+                    event: event,
+                    reaction: reactionSnapshot.data,
+                    onReact: (type) async {
+                      try {
+                        await FirestoreService.instance.setEventReaction(
+                          user: profile,
+                          event: event,
+                          type: type,
+                        );
+                      } catch (error) {
+                        if (context.mounted) {
+                          _showSnack(context, error.toString());
+                        }
+                      }
+                    },
+                    onOpenChat: () {
+                      if (reactionSnapshot.data == null) {
+                        _showSnack(
+                          context,
+                          'Mark Going or Interested to unlock this event chat.',
+                        );
+                        return;
+                      }
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              EventChatScreen(profile: profile, event: event),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -916,11 +1535,14 @@ class _WelcomePanel extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: const [
-              _MetricChip(icon: Icons.school_rounded, label: '8 universities'),
-              _MetricChip(icon: Icons.campaign_rounded, label: '14 events'),
               _MetricChip(
-                icon: Icons.trending_up_rounded,
-                label: 'Sponsored slots ready',
+                icon: Icons.school_rounded,
+                label: 'Karachi campuses',
+              ),
+              _MetricChip(icon: Icons.forum_rounded, label: 'Event chats'),
+              _MetricChip(
+                icon: Icons.verified_rounded,
+                label: 'Admin reviewed',
               ),
             ],
           ),
@@ -960,20 +1582,22 @@ class EventCard extends StatelessWidget {
   const EventCard({
     super.key,
     required this.event,
-    required this.isInterested,
-    required this.onToggleInterest,
+    required this.reaction,
+    required this.onReact,
+    required this.onOpenChat,
   });
 
   final CampusEvent event;
-  final bool isInterested;
-  final VoidCallback onToggleInterest;
+  final EventReaction? reaction;
+  final ValueChanged<EventReactionType> onReact;
+  final VoidCallback onOpenChat;
 
   @override
   Widget build(BuildContext context) {
+    final selectedType = reaction?.type;
+
     return Card(
-      elevation: 0,
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -997,14 +1621,13 @@ class EventCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         event.title,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                     ],
                   ),
                 ),
-                if (event.isFeatured)
+                if (event.featured)
                   const Chip(
                     label: Text('Featured'),
                     visualDensity: VisualDensity.compact,
@@ -1015,29 +1638,70 @@ class EventCard extends StatelessWidget {
             Text(event.description),
             const SizedBox(height: 12),
             _InfoRow(icon: Icons.school_outlined, text: event.university),
-            _InfoRow(icon: Icons.schedule_rounded, text: event.date),
+            _InfoRow(icon: Icons.schedule_rounded, text: event.dateLabel),
             _InfoRow(icon: Icons.location_on_outlined, text: event.location),
             const SizedBox(height: 12),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Expanded(
-                  child: Text(
-                    '${event.attendees} interested',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                _ReactionButton(
+                  type: EventReactionType.going,
+                  selected: selectedType == EventReactionType.going,
+                  count: event.goingCount,
+                  onTap: () => onReact(EventReactionType.going),
                 ),
-                FilledButton.icon(
-                  onPressed: onToggleInterest,
+                _ReactionButton(
+                  type: EventReactionType.interested,
+                  selected: selectedType == EventReactionType.interested,
+                  count: event.interestedCount,
+                  onTap: () => onReact(EventReactionType.interested),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onOpenChat,
                   icon: Icon(
-                    isInterested ? Icons.check_rounded : Icons.add_rounded,
+                    event.chatClosed
+                        ? Icons.lock_clock_outlined
+                        : Icons.groups_2_outlined,
                   ),
-                  label: Text(isInterested ? 'Interested' : 'Join'),
+                  label: Text(event.chatClosed ? 'Chat closed' : 'Event chat'),
                 ),
               ],
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ReactionButton extends StatelessWidget {
+  const _ReactionButton({
+    required this.type,
+    required this.selected,
+    required this.count,
+    required this.onTap,
+  });
+
+  final EventReactionType type;
+  final bool selected;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = '${type.label} $count';
+    if (selected) {
+      return FilledButton.icon(
+        onPressed: onTap,
+        icon: Icon(type.icon),
+        label: Text(label),
+      );
+    }
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(type.icon),
+      label: Text(label),
     );
   }
 }
@@ -1063,117 +1727,211 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-class GlobalChatTab extends StatelessWidget {
-  const GlobalChatTab({
-    super.key,
-    required this.messages,
-    required this.controller,
-    required this.onSend,
-  });
+class GlobalChatTab extends StatefulWidget {
+  const GlobalChatTab({super.key, required this.profile});
 
-  final List<ChatMessage> messages;
-  final TextEditingController controller;
-  final VoidCallback onSend;
+  final UserProfile profile;
+
+  @override
+  State<GlobalChatTab> createState() => _GlobalChatTabState();
+}
+
+class _GlobalChatTabState extends State<GlobalChatTab> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) {
+      return;
+    }
+    _controller.clear();
+    try {
+      await FirestoreService.instance.sendGlobalMessage(widget.profile, text);
+    } catch (error) {
+      if (mounted) {
+        _showSnack(context, error.toString());
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: const Text(
-            'Global campus chat',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: messages.length,
-            itemBuilder: (context, index) => MessageBubble(
-              message: messages[index],
-            ),
-          ),
-        ),
-        SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    minLines: 1,
-                    maxLines: 4,
-                    decoration: InputDecoration(
-                      hintText: 'Ask about events...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onSubmitted: (_) => onSend(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  tooltip: 'Send',
-                  onPressed: onSend,
-                  icon: const Icon(Icons.send_rounded),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
+    return ChatScaffold(
+      title: 'Global campus chat',
+      stream: FirestoreService.instance.globalMessagesStream(),
+      currentUid: widget.profile.uid,
+      controller: _controller,
+      onSend: _send,
+      inputHint: 'Ask about events...',
     );
   }
 }
 
-class MessageBubble extends StatelessWidget {
-  const MessageBubble({super.key, required this.message});
+class PeopleTab extends StatefulWidget {
+  const PeopleTab({super.key, required this.profile});
 
-  final ChatMessage message;
+  final UserProfile profile;
+
+  @override
+  State<PeopleTab> createState() => _PeopleTabState();
+}
+
+class _PeopleTabState extends State<PeopleTab> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      setState(() {
+        _query = _searchController.text.trim().toLowerCase();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final alignment = message.isMe ? Alignment.centerRight : Alignment.centerLeft;
-    final bubbleColor = message.isMe ? const Color(0xFF1F7A8C) : Colors.white;
-    final textColor = message.isMe ? Colors.white : const Color(0xFF17252A);
+    return StreamBuilder<List<UserProfile>>(
+      stream: FirestoreService.instance.usersStream(),
+      builder: (context, usersSnapshot) {
+        if (usersSnapshot.hasError) {
+          return _ErrorList(message: usersSnapshot.error.toString());
+        }
+        if (!usersSnapshot.hasData) {
+          return const LoadingList();
+        }
 
-    return Align(
-      alignment: alignment,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 310),
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: bubbleColor,
-          borderRadius: BorderRadius.circular(8),
+        final users = usersSnapshot.data!
+            .where((user) => user.uid != widget.profile.uid)
+            .where((user) {
+              if (_query.isEmpty) {
+                return true;
+              }
+              final haystack = '${user.name} ${user.university} ${user.email}'
+                  .toLowerCase();
+              return haystack.contains(_query);
+            })
+            .toList();
+
+        return StreamBuilder<Set<String>>(
+          stream: FirestoreService.instance.followingIdsStream(
+            widget.profile.uid,
+          ),
+          builder: (context, followingSnapshot) {
+            final following = followingSnapshot.data ?? {};
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              children: [
+                TextField(
+                  controller: _searchController,
+                  decoration: const InputDecoration(
+                    hintText: 'Search people or universities',
+                    prefixIcon: Icon(Icons.search_rounded),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'People on CampusLoop',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (users.isEmpty)
+                  const EmptyState(
+                    icon: Icons.people_outline_rounded,
+                    title: 'No people found',
+                    text: 'Try another name or university.',
+                  ),
+                for (final user in users)
+                  UserCard(
+                    currentUser: widget.profile,
+                    user: user,
+                    following: following.contains(user.uid),
+                  ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class UserCard extends StatelessWidget {
+  const UserCard({
+    super.key,
+    required this.currentUser,
+    required this.user,
+    required this.following,
+  });
+
+  final UserProfile currentUser;
+  final UserProfile user;
+  final bool following;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(12),
+        leading: GeneratedAvatar(profile: user),
+        title: Text(
+          user.name,
+          style: const TextStyle(fontWeight: FontWeight.w800),
         ),
-        child: Column(
-          crossAxisAlignment:
-              message.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        subtitle: Text('${user.university}\n${user.email}'),
+        isThreeLine: true,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => PublicProfileScreen(profile: user),
+            ),
+          );
+        },
+        trailing: Wrap(
+          spacing: 4,
           children: [
-            Text(
-              '${message.sender} - ${message.university}',
-              style: TextStyle(
-                color: textColor.withValues(alpha: 0.72),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+            IconButton.filledTonal(
+              tooltip: following ? 'Unfollow' : 'Follow',
+              onPressed: () => FirestoreService.instance.toggleFollow(
+                currentUid: currentUser.uid,
+                otherUid: user.uid,
+                currentlyFollowing: following,
+              ),
+              icon: Icon(
+                following
+                    ? Icons.person_remove_alt_1_outlined
+                    : Icons.person_add_alt_1_outlined,
               ),
             ),
-            const SizedBox(height: 5),
-            Text(message.text, style: TextStyle(color: textColor, fontSize: 15)),
-            const SizedBox(height: 5),
-            Text(
-              message.time,
-              style: TextStyle(
-                color: textColor.withValues(alpha: 0.64),
-                fontSize: 11,
-              ),
+            IconButton.filled(
+              tooltip: 'Start chat',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => PrivateChatScreen(
+                      currentUser: currentUser,
+                      otherUser: user,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.chat_bubble_outline_rounded),
             ),
           ],
         ),
@@ -1182,73 +1940,10 @@ class MessageBubble extends StatelessWidget {
   }
 }
 
-class PeopleTab extends StatelessWidget {
-  const PeopleTab({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      children: [
-        Text(
-          'People open to chat',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-        ),
-        const SizedBox(height: 12),
-        for (final contact in contacts) ContactCard(contact: contact),
-      ],
-    );
-  }
-}
-
-class ContactCard extends StatelessWidget {
-  const ContactCard({super.key, required this.contact});
-
-  final StudentContact contact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(12),
-        leading: CircleAvatar(
-          backgroundColor:
-              contact.online ? const Color(0xFFBEE9E8) : const Color(0xFFE2E6E5),
-          child: Text(contact.name.characters.first),
-        ),
-        title: Text(
-          contact.name,
-          style: const TextStyle(fontWeight: FontWeight.w800),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text('${contact.university}\n${contact.about}'),
-        ),
-        isThreeLine: true,
-        trailing: IconButton.filledTonal(
-          tooltip: 'Start private chat',
-          onPressed: () {},
-          icon: const Icon(Icons.chat_bubble_outline_rounded),
-        ),
-      ),
-    );
-  }
-}
-
 class ProfileTab extends StatelessWidget {
-  const ProfileTab({
-    super.key,
-    required this.session,
-    required this.onSignOut,
-  });
+  const ProfileTab({super.key, required this.profile});
 
-  final AuthSession session;
-  final VoidCallback onSignOut;
+  final UserProfile profile;
 
   @override
   Widget build(BuildContext context) {
@@ -1256,31 +1951,25 @@ class ProfileTab extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
         Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                const CircleAvatar(
-                  radius: 32,
-                  backgroundColor: Color(0xFFBEE9E8),
-                  child: Icon(Icons.person, size: 34, color: Color(0xFF17252A)),
-                ),
+                GeneratedAvatar(profile: profile, radius: 32),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        session.displayName,
+                        profile.name,
                         style: const TextStyle(
                           fontSize: 19,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text('${session.campusLabel} - ${session.email}'),
+                      Text('${profile.university} - ${profile.email}'),
                     ],
                   ),
                 ),
@@ -1290,11 +1979,41 @@ class ProfileTab extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         FilledButton.icon(
-          onPressed: onSignOut,
+          onPressed: () => FirestoreService.instance.signOut(),
           icon: const Icon(Icons.logout_rounded),
           label: const Text('Sign out'),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 18),
+        Text(
+          'Your events',
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 10),
+        StreamBuilder<List<EventReaction>>(
+          stream: FirestoreService.instance.userEventsStream(profile.uid),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const LoadingList(compact: true);
+            }
+            final reactions = snapshot.data!;
+            if (reactions.isEmpty) {
+              return const EmptyState(
+                icon: Icons.event_available_outlined,
+                title: 'No saved events yet',
+                text: 'Mark events as Going or Interested to see them here.',
+              );
+            }
+            return Column(
+              children: [
+                for (final reaction in reactions)
+                  EventPrivacyTile(profile: profile, reaction: reaction),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 18),
         const _BusinessTile(
           icon: Icons.workspace_premium_outlined,
           title: 'Featured event listings',
@@ -1315,6 +2034,786 @@ class ProfileTab extends StatelessWidget {
   }
 }
 
+class EventPrivacyTile extends StatelessWidget {
+  const EventPrivacyTile({
+    super.key,
+    required this.profile,
+    required this.reaction,
+  });
+
+  final UserProfile profile;
+  final EventReaction reaction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: SwitchListTile(
+        value: reaction.isPublic,
+        onChanged: (value) => FirestoreService.instance.setEventReactionPublic(
+          uid: profile.uid,
+          eventId: reaction.eventId,
+          isPublic: value,
+        ),
+        secondary: Icon(reaction.type.icon, color: const Color(0xFF1F7A8C)),
+        title: Text(
+          reaction.eventTitle,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        subtitle: Text(
+          '${reaction.type.label} - ${reaction.eventUniversity}\n'
+          '${reaction.isPublic ? 'Visible on public profile' : 'Private to you'}',
+        ),
+      ),
+    );
+  }
+}
+
+class PublicProfileScreen extends StatelessWidget {
+  const PublicProfileScreen({super.key, required this.profile});
+
+  final UserProfile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(profile.name)),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  GeneratedAvatar(profile: profile, radius: 30),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          profile.name,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(profile.university),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Public events',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
+          StreamBuilder<List<EventReaction>>(
+            stream: FirestoreService.instance.publicUserEventsStream(
+              profile.uid,
+            ),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const LoadingList(compact: true);
+              }
+              final reactions = snapshot.data!;
+              if (reactions.isEmpty) {
+                return const EmptyState(
+                  icon: Icons.visibility_off_outlined,
+                  title: 'No public events',
+                  text: 'This student has not shared event activity yet.',
+                );
+              }
+              return Column(
+                children: [
+                  for (final reaction in reactions)
+                    Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: ListTile(
+                        leading: Icon(reaction.type.icon),
+                        title: Text(reaction.eventTitle),
+                        subtitle: Text(
+                          '${reaction.type.label} - ${reaction.eventUniversity}',
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AdminTab extends StatelessWidget {
+  const AdminTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<EventRequest>>(
+      stream: FirestoreService.instance.pendingRequestsStream(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _ErrorList(message: snapshot.error.toString());
+        }
+        if (!snapshot.hasData) {
+          return const LoadingList();
+        }
+        final requests = snapshot.data!;
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: [
+            Text(
+              'Event review',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            if (requests.isEmpty)
+              const EmptyState(
+                icon: Icons.fact_check_outlined,
+                title: 'No pending requests',
+                text: 'Event requests will appear here for admin approval.',
+              ),
+            for (final request in requests) AdminRequestCard(request: request),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class AdminRequestCard extends StatelessWidget {
+  const AdminRequestCard({super.key, required this.request});
+
+  final EventRequest request;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              request.title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(request.description),
+            const SizedBox(height: 10),
+            _InfoRow(icon: Icons.school_outlined, text: request.university),
+            _InfoRow(
+              icon: Icons.schedule_rounded,
+              text: _formatDate(request.startAt),
+            ),
+            _InfoRow(icon: Icons.location_on_outlined, text: request.location),
+            _InfoRow(
+              icon: Icons.person_outline_rounded,
+              text: '${request.requesterName} - ${request.requesterEmail}',
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      try {
+                        await FirestoreService.instance.rejectRequest(request);
+                        if (context.mounted) {
+                          _showSnack(context, 'Request rejected.');
+                        }
+                      } catch (error) {
+                        if (context.mounted) {
+                          _showSnack(context, error.toString());
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.close_rounded),
+                    label: const Text('Reject'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () async {
+                      try {
+                        await FirestoreService.instance.approveRequest(request);
+                        if (context.mounted) {
+                          _showSnack(context, 'Event approved.');
+                        }
+                      } catch (error) {
+                        if (context.mounted) {
+                          _showSnack(context, error.toString());
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.check_rounded),
+                    label: const Text('Approve'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class EventRequestSheet extends StatefulWidget {
+  const EventRequestSheet({super.key, required this.profile});
+
+  final UserProfile profile;
+
+  @override
+  State<EventRequestSheet> createState() => _EventRequestSheetState();
+}
+
+class _EventRequestSheetState extends State<EventRequestSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _categoryController = TextEditingController(text: 'Social');
+  final _locationController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _startController = TextEditingController(text: '2026-05-30 14:00');
+  final _endController = TextEditingController(text: '2026-05-30 16:00');
+  String _university = karachiUniversities.first;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _categoryController.dispose();
+    _locationController.dispose();
+    _descriptionController.dispose();
+    _startController.dispose();
+    _endController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    final startAt = _parseDateInput(_startController.text);
+    final endAt = _parseDateInput(_endController.text);
+    if (startAt == null || endAt == null || !endAt.isAfter(startAt)) {
+      _showSnack(
+        context,
+        'Use valid start/end times. End must be after start.',
+      );
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      await FirestoreService.instance.requestEvent(
+        user: widget.profile,
+        title: _titleController.text.trim(),
+        university: _university,
+        category: _categoryController.text.trim(),
+        location: _locationController.text.trim(),
+        description: _descriptionController.text.trim(),
+        startAt: startAt,
+        endAt: endAt,
+      );
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop();
+      _showSnack(context, 'Event request sent for admin review.');
+    } catch (error) {
+      if (mounted) {
+        _showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Request event listing',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _titleController,
+                decoration: const InputDecoration(labelText: 'Event title'),
+                validator: (value) => _validateRequired(value, 'Title'),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: _university,
+                decoration: const InputDecoration(labelText: 'University'),
+                items: [
+                  for (final university in karachiUniversities)
+                    DropdownMenuItem(
+                      value: university,
+                      child: Text(university),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _university = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _categoryController,
+                decoration: const InputDecoration(labelText: 'Category'),
+                validator: (value) => _validateRequired(value, 'Category'),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _locationController,
+                decoration: const InputDecoration(labelText: 'Location'),
+                validator: (value) => _validateRequired(value, 'Location'),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _startController,
+                decoration: const InputDecoration(
+                  labelText: 'Start time',
+                  hintText: '2026-05-30 14:00',
+                ),
+                validator: (value) => _validateRequired(value, 'Start time'),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _endController,
+                decoration: const InputDecoration(
+                  labelText: 'End time',
+                  hintText: '2026-05-30 16:00',
+                ),
+                validator: (value) => _validateRequired(value, 'End time'),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _descriptionController,
+                minLines: 3,
+                maxLines: 5,
+                decoration: const InputDecoration(labelText: 'Description'),
+                validator: (value) => _validateRequired(value, 'Description'),
+              ),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: _saving ? null : _save,
+                icon: _saving
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send_rounded),
+                label: Text(_saving ? 'Submitting...' : 'Submit for review'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class EventChatScreen extends StatefulWidget {
+  const EventChatScreen({
+    super.key,
+    required this.profile,
+    required this.event,
+  });
+
+  final UserProfile profile;
+  final CampusEvent event;
+
+  @override
+  State<EventChatScreen> createState() => _EventChatScreenState();
+}
+
+class _EventChatScreenState extends State<EventChatScreen> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty || widget.event.chatClosed) {
+      return;
+    }
+    _controller.clear();
+    try {
+      await FirestoreService.instance.sendEventMessage(
+        user: widget.profile,
+        event: widget.event,
+        text: text,
+      );
+    } catch (error) {
+      if (mounted) {
+        _showSnack(context, error.toString());
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ChatPage(
+      title: widget.event.title,
+      subtitle: widget.event.chatClosed
+          ? 'Closed 3 days after event end'
+          : 'Group chat for people going/interested',
+      stream: FirestoreService.instance.eventMessagesStream(widget.event.id),
+      currentUid: widget.profile.uid,
+      controller: _controller,
+      onSend: _send,
+      inputHint: widget.event.chatClosed ? 'Chat closed' : 'Message event chat',
+      inputEnabled: !widget.event.chatClosed,
+    );
+  }
+}
+
+class PrivateChatScreen extends StatefulWidget {
+  const PrivateChatScreen({
+    super.key,
+    required this.currentUser,
+    required this.otherUser,
+  });
+
+  final UserProfile currentUser;
+  final UserProfile otherUser;
+
+  @override
+  State<PrivateChatScreen> createState() => _PrivateChatScreenState();
+}
+
+class _PrivateChatScreenState extends State<PrivateChatScreen> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) {
+      return;
+    }
+    _controller.clear();
+    try {
+      await FirestoreService.instance.sendPrivateMessage(
+        sender: widget.currentUser,
+        recipient: widget.otherUser,
+        text: text,
+      );
+    } catch (error) {
+      if (mounted) {
+        _showSnack(context, error.toString());
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<bool>(
+      stream: FirestoreService.instance.followsStream(
+        widget.currentUser.uid,
+        widget.otherUser.uid,
+      ),
+      builder: (context, mineSnapshot) {
+        return StreamBuilder<bool>(
+          stream: FirestoreService.instance.followsStream(
+            widget.otherUser.uid,
+            widget.currentUser.uid,
+          ),
+          builder: (context, theirsSnapshot) {
+            final mutual =
+                (mineSnapshot.data ?? false) && (theirsSnapshot.data ?? false);
+            return ChatPage(
+              title: widget.otherUser.name,
+              subtitle: mutual
+                  ? 'You both follow each other'
+                  : 'One intro message allowed before mutual follow',
+              stream: FirestoreService.instance.privateMessagesStream(
+                widget.currentUser.uid,
+                widget.otherUser.uid,
+              ),
+              currentUid: widget.currentUser.uid,
+              controller: _controller,
+              onSend: _send,
+              inputHint: mutual
+                  ? 'Message ${widget.otherUser.name}'
+                  : 'Send intro',
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class ChatPage extends StatelessWidget {
+  const ChatPage({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.stream,
+    required this.currentUid,
+    required this.controller,
+    required this.onSend,
+    required this.inputHint,
+    this.inputEnabled = true,
+  });
+
+  final String title;
+  final String subtitle;
+  final Stream<List<ChatMessage>> stream;
+  final String currentUid;
+  final TextEditingController controller;
+  final VoidCallback onSend;
+  final String inputHint;
+  final bool inputEnabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(
+              subtitle,
+              style: Theme.of(context).textTheme.bodySmall,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+      body: ChatScaffold(
+        title: null,
+        stream: stream,
+        currentUid: currentUid,
+        controller: controller,
+        onSend: onSend,
+        inputHint: inputHint,
+        inputEnabled: inputEnabled,
+      ),
+    );
+  }
+}
+
+class ChatScaffold extends StatelessWidget {
+  const ChatScaffold({
+    super.key,
+    required this.title,
+    required this.stream,
+    required this.currentUid,
+    required this.controller,
+    required this.onSend,
+    required this.inputHint,
+    this.inputEnabled = true,
+  });
+
+  final String? title;
+  final Stream<List<ChatMessage>> stream;
+  final String currentUid;
+  final TextEditingController controller;
+  final VoidCallback onSend;
+  final String inputHint;
+  final bool inputEnabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        if (title != null)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Text(
+              title!,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+            ),
+          ),
+        Expanded(
+          child: StreamBuilder<List<ChatMessage>>(
+            stream: stream,
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return _ErrorList(message: snapshot.error.toString());
+              }
+              if (!snapshot.hasData) {
+                return const LoadingList();
+              }
+              final messages = snapshot.data!;
+              if (messages.isEmpty) {
+                return const EmptyState(
+                  icon: Icons.forum_outlined,
+                  title: 'No messages yet',
+                  text: 'Start the conversation.',
+                );
+              }
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: messages.length,
+                itemBuilder: (context, index) => MessageBubble(
+                  message: messages[index],
+                  isMe: messages[index].senderId == currentUid,
+                ),
+              );
+            },
+          ),
+        ),
+        SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    enabled: inputEnabled,
+                    minLines: 1,
+                    maxLines: 4,
+                    decoration: InputDecoration(hintText: inputHint),
+                    onSubmitted: (_) => onSend(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  tooltip: 'Send',
+                  onPressed: inputEnabled ? onSend : null,
+                  icon: const Icon(Icons.send_rounded),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class MessageBubble extends StatelessWidget {
+  const MessageBubble({super.key, required this.message, required this.isMe});
+
+  final ChatMessage message;
+  final bool isMe;
+
+  @override
+  Widget build(BuildContext context) {
+    final alignment = isMe ? Alignment.centerRight : Alignment.centerLeft;
+    final bubbleColor = isMe ? const Color(0xFF1F7A8C) : Colors.white;
+    final textColor = isMe ? Colors.white : const Color(0xFF17252A);
+
+    return Align(
+      alignment: alignment,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 310),
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: bubbleColor,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: isMe
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${message.senderName} - ${message.senderUniversity}',
+              style: TextStyle(
+                color: textColor.withValues(alpha: 0.72),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              message.text,
+              style: TextStyle(color: textColor, fontSize: 15),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              _formatTime(message.createdAt),
+              style: TextStyle(
+                color: textColor.withValues(alpha: 0.64),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class GeneratedAvatar extends StatelessWidget {
+  const GeneratedAvatar({super.key, required this.profile, this.radius = 24});
+
+  final UserProfile profile;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _avatarColor(profile.avatarSeed);
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: color,
+      child: Text(
+        _initials(profile.name),
+        style: TextStyle(
+          color: color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
 class _BusinessTile extends StatelessWidget {
   const _BusinessTile({
     required this.icon,
@@ -1329,9 +2828,7 @@ class _BusinessTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 0,
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: ListTile(
         leading: Icon(icon, color: const Color(0xFF1F7A8C)),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -1339,4 +2836,226 @@ class _BusinessTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class EmptyState extends StatelessWidget {
+  const EmptyState({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.text,
+  });
+
+  final IconData icon;
+  final String title;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Column(
+        children: [
+          Icon(icon, size: 44, color: const Color(0xFF526166)),
+          const SizedBox(height: 10),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text(text, textAlign: TextAlign.center),
+        ],
+      ),
+    );
+  }
+}
+
+class LoadingList extends StatelessWidget {
+  const LoadingList({super.key, this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(compact ? 16 : 48),
+        child: const CircularProgressIndicator(),
+      ),
+    );
+  }
+}
+
+class _ErrorList extends StatelessWidget {
+  const _ErrorList({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [_ErrorPanel(message: message)],
+    );
+  }
+}
+
+class _ErrorPanel extends StatelessWidget {
+  const _ErrorPanel({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFE4E1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline_rounded, color: Color(0xFFB3261E)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Color(0xFF6B1D18),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String? _validateRequired(String? value, String label) {
+  if (value == null || value.trim().isEmpty) {
+    return '$label is required.';
+  }
+  return null;
+}
+
+String? _validateEmail(String? value) {
+  final email = value?.trim() ?? '';
+  if (email.isEmpty) {
+    return 'Email is required.';
+  }
+  if (!email.contains('@') || !email.contains('.')) {
+    return 'Enter a valid email address.';
+  }
+  return null;
+}
+
+String? _validatePassword(String? value) {
+  final password = value ?? '';
+  if (password.length < 6) {
+    return 'Use at least 6 characters.';
+  }
+  return null;
+}
+
+String _friendlyAuthError(FirebaseAuthException error) {
+  return switch (error.code) {
+    'email-already-in-use' => 'An account already exists for that email.',
+    'invalid-email' => 'Enter a valid email address.',
+    'weak-password' => 'Use a password with at least 6 characters.',
+    'user-not-found' => 'No account was found for that email.',
+    'wrong-password' => 'Email or password is incorrect.',
+    'invalid-credential' => 'Email or password is incorrect.',
+    'operation-not-allowed' =>
+      'Enable Email/Password sign-in in Firebase Authentication.',
+    _ => error.message ?? error.code,
+  };
+}
+
+DateTime? _parseDateInput(String value) {
+  final normalized = value.trim().replaceFirst(' ', 'T');
+  return DateTime.tryParse(normalized);
+}
+
+DateTime _asDate(Object? value, DateTime fallback) {
+  if (value is Timestamp) {
+    return value.toDate();
+  }
+  if (value is DateTime) {
+    return value;
+  }
+  if (value is String) {
+    return DateTime.tryParse(value) ?? fallback;
+  }
+  return fallback;
+}
+
+int _asInt(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return 0;
+}
+
+String _formatDate(DateTime value) {
+  final months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
+  final minute = value.minute.toString().padLeft(2, '0');
+  final period = value.hour >= 12 ? 'PM' : 'AM';
+  return '${months[value.month - 1]} ${value.day}, $hour:$minute $period';
+}
+
+String _formatTime(DateTime value) {
+  final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
+  final minute = value.minute.toString().padLeft(2, '0');
+  final period = value.hour >= 12 ? 'PM' : 'AM';
+  return '$hour:$minute $period';
+}
+
+String _initials(String name) {
+  final parts = name
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .toList();
+  if (parts.isEmpty) {
+    return 'CL';
+  }
+  if (parts.length == 1) {
+    return parts.first.substring(0, min(2, parts.first.length)).toUpperCase();
+  }
+  return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+}
+
+Color _avatarColor(String seed) {
+  final colors = [
+    const Color(0xFF1F7A8C),
+    const Color(0xFF8A4FFF),
+    const Color(0xFFE56B6F),
+    const Color(0xFF2D6A4F),
+    const Color(0xFFB56576),
+    const Color(0xFF5E60CE),
+    const Color(0xFF006D77),
+    const Color(0xFF9A6324),
+  ];
+  final index = seed.codeUnits.fold<int>(0, (total, unit) => total + unit);
+  return colors[index % colors.length];
+}
+
+void _showSnack(BuildContext context, String message) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
