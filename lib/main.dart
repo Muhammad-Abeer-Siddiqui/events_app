@@ -5,6 +5,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 
+import 'firebase_options.dart';
+
 const adminEmail = 'abeersiddiki2k18@gmail.com';
 
 const karachiUniversities = [
@@ -30,15 +32,11 @@ const karachiUniversities = [
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final options = AppFirebaseOptions.currentPlatform;
-
-  if (options == null) {
-    runApp(const FirebaseSetupApp());
-    return;
-  }
 
   try {
-    await Firebase.initializeApp(options: options);
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
     runApp(const CampusLoopApp());
   } catch (error) {
     runApp(FirebaseSetupApp(error: error.toString()));
@@ -46,34 +44,8 @@ Future<void> main() async {
 }
 
 class AppFirebaseOptions {
-  static const apiKey = String.fromEnvironment('FIREBASE_WEB_API_KEY');
-  static const appId = String.fromEnvironment('FIREBASE_APP_ID');
-  static const messagingSenderId = String.fromEnvironment(
-    'FIREBASE_MESSAGING_SENDER_ID',
-  );
-  static const projectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
-  static const authDomain = String.fromEnvironment('FIREBASE_AUTH_DOMAIN');
-  static const databaseUrl = String.fromEnvironment('FIREBASE_DATABASE_URL');
-  static const storageBucket = String.fromEnvironment(
-    'FIREBASE_STORAGE_BUCKET',
-  );
-
-  static FirebaseOptions? get currentPlatform {
-    final requiredValues = [apiKey, appId, messagingSenderId, projectId];
-    if (requiredValues.any((value) => value.trim().isEmpty)) {
-      return null;
-    }
-
-    return FirebaseOptions(
-      apiKey: apiKey,
-      appId: appId,
-      messagingSenderId: messagingSenderId,
-      projectId: projectId,
-      authDomain: authDomain.trim().isEmpty ? null : authDomain,
-      databaseURL: databaseUrl.trim().isEmpty ? null : databaseUrl,
-      storageBucket: storageBucket.trim().isEmpty ? null : storageBucket,
-    );
-  }
+  static const databaseUrl =
+      'https://events-app-48a05-default-rtdb.firebaseio.com';
 }
 
 class CampusLoopApp extends StatelessWidget {

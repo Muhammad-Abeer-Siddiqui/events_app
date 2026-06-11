@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "466686860625",
+    "firebase_url": "https://events-app-48a05-default-rtdb.firebaseio.com",
+    "project_id": "events-app-48a05",
+    "storage_bucket": "events-app-48a05.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:466686860625:android:99a43089630a66d0250770",
+        "android_client_info": {
+          "package_name": "com.example.events_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAQ3L-j2So3a6jXBOFKSAr26qfDhGgK6N8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
