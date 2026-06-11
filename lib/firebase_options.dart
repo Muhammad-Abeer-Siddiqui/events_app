@@ -67,5 +67,4 @@ class DefaultFirebaseOptions {
     storageBucket: 'events-app-48a05.firebasestorage.app',
     iosBundleId: 'com.example.eventsApp',
   );
-
 }
