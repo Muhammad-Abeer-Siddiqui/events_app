@@ -222,7 +222,9 @@ class RealtimeDatabaseService {
       university: university,
       email: email,
     );
-    await ensureSeedEvents();
+    if (isAdminEmail(email)) {
+      await ensureSeedEvents();
+    }
   }
 
   Future<void> signIn({required String email, required String password}) async {
@@ -231,7 +233,9 @@ class RealtimeDatabaseService {
       password: password,
     );
     await ensureUserDocument(credential.user!);
-    await ensureSeedEvents();
+    if (isAdminEmail(email)) {
+      await ensureSeedEvents();
+    }
   }
 
   Future<void> signOut() => auth.signOut();
