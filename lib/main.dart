@@ -1,13 +1,10 @@
+import 'dart:async';
 import 'dart:math';
 
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 
-import 'firebase_options.dart';
-
 const adminEmail = 'abeersiddiki2k18@gmail.com';
+const adminPassword = 'admin123';
 
 const karachiUniversities = [
   'University of Karachi',
@@ -32,20 +29,7 @@ const karachiUniversities = [
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    runApp(const CampusLoopApp());
-  } catch (error) {
-    runApp(FirebaseSetupApp(error: error.toString()));
-  }
-}
-
-class AppFirebaseOptions {
-  static const databaseUrl =
-      'https://events-app-48a05-default-rtdb.firebaseio.com';
+  runApp(const CampusLoopApp());
 }
 
 class CampusLoopApp extends StatelessWidget {
@@ -90,120 +74,107 @@ ThemeData campusTheme() {
   );
 }
 
-class FirebaseSetupApp extends StatelessWidget {
-  const FirebaseSetupApp({super.key, this.error});
-
-  final String? error;
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'CampusLoop setup',
-      theme: campusTheme(),
-      home: Scaffold(
-        body: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Firebase setup needed',
-                          style: TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'CampusLoop now uses Firebase Auth and Realtime Database. Run with your Firebase app values so signup, users, events, and chats can sync.',
-                        ),
-                        if (error != null) ...[
-                          const SizedBox(height: 12),
-                          _ErrorPanel(message: error!),
-                        ],
-                        const SizedBox(height: 14),
-                        const _SetupLine(label: 'FIREBASE_WEB_API_KEY'),
-                        const _SetupLine(label: 'FIREBASE_PROJECT_ID'),
-                        const _SetupLine(label: 'FIREBASE_APP_ID'),
-                        const _SetupLine(label: 'FIREBASE_MESSAGING_SENDER_ID'),
-                        const _SetupLine(label: 'FIREBASE_DATABASE_URL'),
-                        const SizedBox(height: 14),
-                        const Text(
-                          'Example',
-                          style: TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 6),
-                        SelectableText(
-                          'flutter run -d windows '
-                          '--dart-define=FIREBASE_WEB_API_KEY=AIza... '
-                          '--dart-define=FIREBASE_PROJECT_ID=your-project-id '
-                          '--dart-define=FIREBASE_APP_ID=1:123:web:abc '
-                          '--dart-define=FIREBASE_MESSAGING_SENDER_ID=123 '
-                          '--dart-define=FIREBASE_DATABASE_URL=https://your-project-default-rtdb.firebaseio.com',
-                          style: TextStyle(
-                            color: Colors.grey.shade800,
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SetupLine extends StatelessWidget {
-  const _SetupLine({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: Row(
-        children: [
-          const Icon(Icons.check_circle_outline_rounded, size: 18),
-          const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-        ],
-      ),
-    );
-  }
-}
-
 class RealtimeDatabaseService {
-  RealtimeDatabaseService._();
+  RealtimeDatabaseService._() {
+    _events = [...seedEvents];
+    _users = [
+      const UserProfile(
+        uid: 'admin',
+        name: 'CampusLoop Admin',
+        university: 'CampusLoop HQ',
+        email: adminEmail,
+        avatarSeed: 'admin',
+      ),
+      const UserProfile(
+        uid: 'sara',
+        name: 'Sara Ahmed',
+        university: 'IBA Karachi',
+        email: 'sara@campusloop.demo',
+        avatarSeed: 'sara',
+      ),
+      const UserProfile(
+        uid: 'hassan',
+        name: 'Hassan Khan',
+        university: 'NED University',
+        email: 'hassan@campusloop.demo',
+        avatarSeed: 'hassan',
+      ),
+      const UserProfile(
+        uid: 'maha',
+        name: 'Maha Rizvi',
+        university: 'Habib University',
+        email: 'maha@campusloop.demo',
+        avatarSeed: 'maha',
+      ),
+    ];
+    _globalMessages = [
+      ChatMessage(
+        id: _nextId('message'),
+        senderId: 'sara',
+        senderName: 'Sara Ahmed',
+        senderUniversity: 'IBA Karachi',
+        text: 'Anyone going to AI Startup Weekend?',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 42)),
+      ),
+      ChatMessage(
+        id: _nextId('message'),
+        senderId: 'hassan',
+        senderName: 'Hassan Khan',
+        senderUniversity: 'NED University',
+        text: 'Yes, their mentor lineup looks solid.',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 26)),
+      ),
+    ];
+    _pendingRequests = [
+      EventRequest(
+        id: _nextId('request'),
+        title: 'Founders Coffee Meetup',
+        university: 'DHA Suffa University',
+        category: 'Networking',
+        location: 'Cafe Courtyard',
+        description: 'A casual evening for students with startup ideas.',
+        startAt: DateTime.now().add(const Duration(days: 5, hours: 3)),
+        endAt: DateTime.now().add(const Duration(days: 5, hours: 5)),
+        requesterName: 'Maha Rizvi',
+        requesterEmail: 'maha@campusloop.demo',
+      ),
+    ];
+  }
 
   static final instance = RealtimeDatabaseService._();
 
-  final FirebaseAuth auth = FirebaseAuth.instance;
+  final _authController = StreamController<UserProfile?>.broadcast();
+  final _eventsController = StreamController<List<CampusEvent>>.broadcast();
+  final _requestsController = StreamController<List<EventRequest>>.broadcast();
+  final _usersController = StreamController<List<UserProfile>>.broadcast();
+  final _globalMessagesController =
+      StreamController<List<ChatMessage>>.broadcast();
+  final _userEventControllers =
+      <String, StreamController<List<EventReaction>>>{};
+  final _reactionControllers = <String, StreamController<EventReaction?>>{};
+  final _followingControllers = <String, StreamController<Set<String>>>{};
+  final _followControllers = <String, StreamController<bool>>{};
+  final _eventMessageControllers =
+      <String, StreamController<List<ChatMessage>>>{};
+  final _privateMessageControllers =
+      <String, StreamController<List<ChatMessage>>>{};
+  final _profileControllers = <String, StreamController<UserProfile?>>{};
 
-  FirebaseDatabase get database {
-    final url = AppFirebaseOptions.databaseUrl.trim();
-    if (url.isEmpty) {
-      return FirebaseDatabase.instance;
-    }
-    return FirebaseDatabase.instanceFor(app: Firebase.app(), databaseURL: url);
+  late List<CampusEvent> _events;
+  late List<UserProfile> _users;
+  late List<EventRequest> _pendingRequests;
+  late List<ChatMessage> _globalMessages;
+  final _userEvents = <String, Map<String, EventReaction>>{};
+  final _following = <String, Set<String>>{};
+  final _eventMessages = <String, List<ChatMessage>>{};
+  final _privateMessages = <String, List<ChatMessage>>{};
+  UserProfile? _currentUser;
+  int _idCounter = 0;
+
+  Stream<UserProfile?> authStateChanges() {
+    Future.microtask(() => _authController.add(_currentUser));
+    return _authController.stream;
   }
-
-  DatabaseReference get db => database.ref();
-
-  bool isAdminEmail(String email) => email.trim().toLowerCase() == adminEmail;
 
   Future<void> signUp({
     required String name,
@@ -211,138 +182,91 @@ class RealtimeDatabaseService {
     required String email,
     required String password,
   }) async {
-    final credential = await auth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    await credential.user?.updateDisplayName(name);
-    await upsertUserProfile(
-      uid: credential.user!.uid,
-      name: name,
-      university: university,
-      email: email,
-    );
-    if (isAdminEmail(email)) {
-      await ensureSeedEvents();
+    if (password.length < 6) {
+      throw Exception('Use at least 6 characters.');
     }
+    final normalizedEmail = email.trim().toLowerCase();
+    final existing = _users.where((user) => user.email == normalizedEmail);
+    final profile = existing.isNotEmpty
+        ? existing.first
+        : UserProfile(
+            uid: _nextId('user'),
+            name: name.trim().isEmpty
+                ? normalizedEmail.split('@').first
+                : name.trim(),
+            university: university,
+            email: normalizedEmail,
+            avatarSeed: normalizedEmail,
+          );
+    if (existing.isEmpty) {
+      _users.add(profile);
+    }
+    _currentUser = profile;
+    _emitAll();
   }
 
   Future<void> signIn({required String email, required String password}) async {
-    final credential = await auth.signInWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    await ensureUserDocument(credential.user!);
-    if (isAdminEmail(email)) {
-      await ensureSeedEvents();
-    }
-  }
-
-  Future<void> signOut() => auth.signOut();
-
-  Future<void> ensureUserDocument(User user) async {
-    final snapshot = await db.child('users/${user.uid}').get();
-    if (snapshot.exists) {
-      await snapshot.ref.update({'lastSeenAt': ServerValue.timestamp});
+    final normalizedEmail = email.trim().toLowerCase();
+    if (normalizedEmail == adminEmail && password == adminPassword) {
+      _currentUser = _users.firstWhere((user) => user.email == adminEmail);
+      _emitAll();
       return;
     }
 
-    await upsertUserProfile(
-      uid: user.uid,
-      name: user.displayName ?? user.email?.split('@').first ?? 'Student',
-      university: 'Campus student',
-      email: user.email ?? '',
-    );
-  }
-
-  Future<void> upsertUserProfile({
-    required String uid,
-    required String name,
-    required String university,
-    required String email,
-  }) {
-    final normalized =
-        '${name.toLowerCase()} ${university.toLowerCase()} '
-        '${email.toLowerCase()}';
-    return db.child('users/$uid').update({
-      'uid': uid,
-      'name': name,
-      'university': university,
-      'email': email.toLowerCase(),
-      'avatarSeed': uid,
-      'searchText': normalized,
-      'createdAt': ServerValue.timestamp,
-      'lastSeenAt': ServerValue.timestamp,
-    });
-  }
-
-  Future<void> ensureSeedEvents() async {
-    for (final event in seedEvents) {
-      await db.child('events/${event.id}').update(event.toSeedMap());
+    final existing = _users.where((user) => user.email == normalizedEmail);
+    if (existing.isNotEmpty) {
+      _currentUser = existing.first;
+    } else {
+      _currentUser = UserProfile(
+        uid: _nextId('user'),
+        name: normalizedEmail.contains('@')
+            ? normalizedEmail.split('@').first
+            : 'Demo Student',
+        university: 'Campus student',
+        email: normalizedEmail,
+        avatarSeed: normalizedEmail,
+      );
+      _users.add(_currentUser!);
     }
+    _emitAll();
   }
+
+  Future<void> signOut() async {
+    _currentUser = null;
+    _authController.add(null);
+  }
+
+  Future<void> ensureUserDocument(Object user) async {}
+  Future<void> ensureSeedEvents() async => _emitEvents();
 
   Stream<List<CampusEvent>> eventsStream() {
-    return db
-        .child('events')
-        .orderByChild('status')
-        .equalTo('approved')
-        .onValue
-        .map((event) {
-          final events = event.snapshot.children
-              .map(
-                (child) => CampusEvent.fromSnapshot(
-                  child.key ?? '',
-                  _asMap(child.value),
-                ),
-              )
-              .toList();
-          events.sort((a, b) => a.startAt.compareTo(b.startAt));
-          return events;
-        });
+    Future.microtask(_emitEvents);
+    return _eventsController.stream;
   }
 
   Stream<EventReaction?> eventReactionStream(String uid, String eventId) {
-    return db.child('userEvents/$uid/$eventId').onValue.map((event) {
-      if (!event.snapshot.exists) {
-        return null;
-      }
-      return EventReaction.fromSnapshot(
-        event.snapshot.key ?? eventId,
-        _asMap(event.snapshot.value),
-      );
-    });
+    final key = '$uid:$eventId';
+    final controller = _reactionControllers.putIfAbsent(
+      key,
+      () => StreamController<EventReaction?>.broadcast(),
+    );
+    Future.microtask(() => controller.add(_userEvents[uid]?[eventId]));
+    return controller.stream;
   }
 
   Stream<List<EventReaction>> userEventsStream(String uid) {
-    return db.child('userEvents/$uid').onValue.map((event) {
-      final reactions = event.snapshot.children
-          .map(
-            (child) => EventReaction.fromSnapshot(
-              child.key ?? '',
-              _asMap(child.value),
-            ),
-          )
-          .toList();
-      reactions.sort((a, b) => b.eventStartAt.compareTo(a.eventStartAt));
-      return reactions;
-    });
+    final controller = _userEventControllers.putIfAbsent(
+      uid,
+      () => StreamController<List<EventReaction>>.broadcast(),
+    );
+    Future.microtask(() => _emitUserEvents(uid));
+    return controller.stream;
   }
 
   Stream<List<EventReaction>> publicUserEventsStream(String uid) {
-    return db.child('userEvents/$uid').onValue.map((event) {
-      final reactions = event.snapshot.children
-          .map(
-            (child) => EventReaction.fromSnapshot(
-              child.key ?? '',
-              _asMap(child.value),
-            ),
-          )
-          .where((reaction) => reaction.isPublic)
-          .toList();
-      reactions.sort((a, b) => b.eventStartAt.compareTo(a.eventStartAt));
-      return reactions;
-    });
+    return userEventsStream(
+      uid,
+    ).map((events) => events.where((reaction) => reaction.isPublic).toList());
   }
 
   Future<void> setEventReaction({
@@ -350,60 +274,55 @@ class RealtimeDatabaseService {
     required CampusEvent event,
     required EventReactionType type,
   }) async {
-    final eventRef = db.child('events/${event.id}');
-    final reactionRef = db.child('userEvents/${user.uid}/${event.id}');
-    final currentReaction = await reactionRef.get();
-    final oldData = _asMap(currentReaction.value);
-    final oldType = oldData['type']?.toString();
-    final oldPublic = oldData['public'] == true;
-    final newType = oldType == type.key ? null : type.key;
+    final index = _events.indexWhere((item) => item.id == event.id);
+    if (index == -1) return;
 
-    final eventSnapshot = await eventRef.get();
-    final eventData = _asMap(eventSnapshot.value);
-    var goingCount = _asInt(eventData['goingCount']);
-    var interestedCount = _asInt(eventData['interestedCount']);
+    final reactions = _userEvents.putIfAbsent(user.uid, () => {});
+    final old = reactions[event.id];
+    var goingCount = _events[index].goingCount;
+    var interestedCount = _events[index].interestedCount;
 
-    if (oldType == EventReactionType.going.key) {
+    if (old?.type == EventReactionType.going) {
       goingCount = max(0, goingCount - 1);
     }
-    if (oldType == EventReactionType.interested.key) {
+    if (old?.type == EventReactionType.interested) {
       interestedCount = max(0, interestedCount - 1);
     }
 
-    if (newType == EventReactionType.going.key) {
-      goingCount += 1;
-    }
-    if (newType == EventReactionType.interested.key) {
-      interestedCount += 1;
-    }
-
-    await eventRef.update({
-      'goingCount': goingCount,
-      'interestedCount': interestedCount,
-    });
-
-    if (newType == null) {
-      await reactionRef.remove();
-      return;
+    if (old?.type == type) {
+      reactions.remove(event.id);
+    } else {
+      if (type == EventReactionType.going) goingCount += 1;
+      if (type == EventReactionType.interested) interestedCount += 1;
+      reactions[event.id] = EventReaction(
+        eventId: event.id,
+        eventTitle: event.title,
+        eventUniversity: event.university,
+        eventStartAt: event.startAt,
+        type: type,
+        isPublic: old?.isPublic ?? false,
+      );
     }
 
-    await reactionRef.update({
-      'eventId': event.id,
-      'eventTitle': event.title,
-      'eventUniversity': event.university,
-      'eventStartAt': event.startAt.millisecondsSinceEpoch,
-      'type': newType,
-      'public': oldPublic,
-      'updatedAt': ServerValue.timestamp,
-    });
+    _events[index] = _events[index].copyWith(
+      goingCount: goingCount,
+      interestedCount: interestedCount,
+    );
+    _emitEvents();
+    _emitUserEvents(user.uid);
+    _emitReaction(user.uid, event.id);
   }
 
   Future<void> setEventReactionPublic({
     required String uid,
     required String eventId,
     required bool isPublic,
-  }) {
-    return db.child('userEvents/$uid/$eventId').update({'public': isPublic});
+  }) async {
+    final reaction = _userEvents[uid]?[eventId];
+    if (reaction == null) return;
+    _userEvents[uid]![eventId] = reaction.copyWith(isPublic: isPublic);
+    _emitUserEvents(uid);
+    _emitReaction(uid, eventId);
   }
 
   Future<void> requestEvent({
@@ -415,92 +334,72 @@ class RealtimeDatabaseService {
     required String description,
     required DateTime startAt,
     required DateTime endAt,
-  }) {
-    return db.child('eventRequests').push().set({
-      'title': title,
-      'university': university,
-      'category': category,
-      'location': location,
-      'description': description,
-      'startAt': startAt.millisecondsSinceEpoch,
-      'endAt': endAt.millisecondsSinceEpoch,
-      'requesterUid': user.uid,
-      'requesterName': user.name,
-      'requesterEmail': user.email,
-      'status': 'pending',
-      'createdAt': ServerValue.timestamp,
-    });
+  }) async {
+    _pendingRequests.add(
+      EventRequest(
+        id: _nextId('request'),
+        title: title,
+        university: university,
+        category: category,
+        location: location,
+        description: description,
+        startAt: startAt,
+        endAt: endAt,
+        requesterName: user.name,
+        requesterEmail: user.email,
+      ),
+    );
+    _emitRequests();
   }
 
   Stream<List<EventRequest>> pendingRequestsStream() {
-    return db
-        .child('eventRequests')
-        .orderByChild('status')
-        .equalTo('pending')
-        .onValue
-        .map((event) {
-          final requests = event.snapshot.children
-              .map(
-                (child) => EventRequest.fromSnapshot(
-                  child.key ?? '',
-                  _asMap(child.value),
-                ),
-              )
-              .toList();
-          requests.sort((a, b) => b.startAt.compareTo(a.startAt));
-          return requests;
-        });
+    Future.microtask(_emitRequests);
+    return _requestsController.stream;
   }
 
   Future<void> approveRequest(EventRequest request) async {
-    await db.update({
-      'events/${request.id}': {
-        'title': request.title,
-        'university': request.university,
-        'category': request.category,
-        'location': request.location,
-        'description': request.description,
-        'startAt': request.startAt.millisecondsSinceEpoch,
-        'endAt': request.endAt.millisecondsSinceEpoch,
-        'status': 'approved',
-        'featured': false,
-        'goingCount': 0,
-        'interestedCount': 0,
-        'createdAt': ServerValue.timestamp,
-        'approvedAt': ServerValue.timestamp,
-      },
-      'eventRequests/${request.id}/status': 'approved',
-      'eventRequests/${request.id}/reviewedAt': ServerValue.timestamp,
-    });
+    _pendingRequests.removeWhere((item) => item.id == request.id);
+    _events.add(
+      CampusEvent(
+        id: request.id,
+        title: request.title,
+        university: request.university,
+        startAt: request.startAt,
+        endAt: request.endAt,
+        location: request.location,
+        category: request.category,
+        description: request.description,
+        goingCount: 0,
+        interestedCount: 0,
+        featured: false,
+      ),
+    );
+    _emitRequests();
+    _emitEvents();
   }
 
-  Future<void> rejectRequest(EventRequest request) {
-    return db.child('eventRequests/${request.id}').update({
-      'status': 'rejected',
-      'reviewedAt': ServerValue.timestamp,
-    });
+  Future<void> rejectRequest(EventRequest request) async {
+    _pendingRequests.removeWhere((item) => item.id == request.id);
+    _emitRequests();
   }
 
   Stream<List<ChatMessage>> globalMessagesStream() {
-    return db
-        .child('globalMessages')
-        .orderByChild('createdAt')
-        .limitToLast(80)
-        .onValue
-        .map((event) => _messagesFromSnapshot(event.snapshot));
+    Future.microtask(_emitGlobalMessages);
+    return _globalMessagesController.stream;
   }
 
-  Future<void> sendGlobalMessage(UserProfile user, String text) {
-    return _sendMessage(db.child('globalMessages'), user: user, text: text);
+  Future<void> sendGlobalMessage(UserProfile user, String text) async {
+    _globalMessages.add(_message(user, text));
+    _emitGlobalMessages();
   }
 
   Stream<List<ChatMessage>> eventMessagesStream(String eventId) {
-    return db
-        .child('eventChats/$eventId/messages')
-        .orderByChild('createdAt')
-        .limitToLast(80)
-        .onValue
-        .map((event) => _messagesFromSnapshot(event.snapshot));
+    final controller = _eventMessageControllers.putIfAbsent(
+      eventId,
+      () => StreamController<List<ChatMessage>>.broadcast(),
+    );
+    Future.microtask(() => _emitEventMessages(eventId));
+    return controller.stream;
   }
 
   Future<void> sendEventMessage({
@@ -508,69 +407,50 @@ class RealtimeDatabaseService {
     required CampusEvent event,
     required String text,
   }) async {
-    if (event.chatClosed) {
-      throw Exception('This event chat is closed.');
-    }
-    final chatRef = db.child('eventChats/${event.id}');
-    await chatRef.update({
-      'eventId': event.id,
-      'eventTitle': event.title,
-      'expiresAt': event.endAt
-          .add(const Duration(days: 3))
-          .millisecondsSinceEpoch,
-      'updatedAt': ServerValue.timestamp,
-    });
-    await _sendMessage(chatRef.child('messages'), user: user, text: text);
+    if (event.chatClosed) throw Exception('This event chat is closed.');
+    _eventMessages.putIfAbsent(event.id, () => []).add(_message(user, text));
+    _emitEventMessages(event.id);
   }
 
   Stream<List<UserProfile>> usersStream() {
-    return db.child('users').orderByChild('name').onValue.map((event) {
-      final users = event.snapshot.children
-          .map(
-            (child) =>
-                UserProfile.fromSnapshot(child.key ?? '', _asMap(child.value)),
-          )
-          .toList();
-      users.sort(
-        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-      );
-      return users;
-    });
+    Future.microtask(_emitUsers);
+    return _usersController.stream;
   }
 
   Stream<Set<String>> followingIdsStream(String uid) {
-    return db
-        .child('following/$uid')
-        .onValue
-        .map(
-          (event) =>
-              event.snapshot.children.map((child) => child.key ?? '').toSet(),
-        );
+    final controller = _followingControllers.putIfAbsent(
+      uid,
+      () => StreamController<Set<String>>.broadcast(),
+    );
+    Future.microtask(() => _emitFollowing(uid));
+    return controller.stream;
   }
 
   Future<void> toggleFollow({
     required String currentUid,
     required String otherUid,
     required bool currentlyFollowing,
-  }) {
-    final ref = db.child('following/$currentUid/$otherUid');
-    if (currentlyFollowing) {
-      return ref.remove();
-    }
-    return ref.set({'createdAt': ServerValue.timestamp});
+  }) async {
+    final mine = _following.putIfAbsent(currentUid, () => {});
+    currentlyFollowing ? mine.remove(otherUid) : mine.add(otherUid);
+    _emitFollowing(currentUid);
+    _emitFollow(currentUid, otherUid);
+    _emitFollow(otherUid, currentUid);
   }
 
   Stream<bool> followsStream(String fromUid, String toUid) {
-    return db
-        .child('following/$fromUid/$toUid')
-        .onValue
-        .map((event) => event.snapshot.exists);
+    final key = '$fromUid:$toUid';
+    final controller = _followControllers.putIfAbsent(
+      key,
+      () => StreamController<bool>.broadcast(),
+    );
+    Future.microtask(() => _emitFollow(fromUid, toUid));
+    return controller.stream;
   }
 
   Future<bool> mutualFollow(String uid, String otherUid) async {
-    final mine = await db.child('following/$uid/$otherUid').get();
-    final theirs = await db.child('following/$otherUid/$uid').get();
-    return mine.exists && theirs.exists;
+    return (_following[uid]?.contains(otherUid) ?? false) &&
+        (_following[otherUid]?.contains(uid) ?? false);
   }
 
   String privateChatId(String a, String b) {
@@ -583,12 +463,12 @@ class RealtimeDatabaseService {
     String otherUid,
   ) {
     final chatId = privateChatId(currentUid, otherUid);
-    return db
-        .child('privateChats/$chatId/messages')
-        .orderByChild('createdAt')
-        .limitToLast(80)
-        .onValue
-        .map((event) => _messagesFromSnapshot(event.snapshot));
+    final controller = _privateMessageControllers.putIfAbsent(
+      chatId,
+      () => StreamController<List<ChatMessage>>.broadcast(),
+    );
+    Future.microtask(() => _emitPrivateMessages(chatId));
+    return controller.stream;
   }
 
   Future<void> sendPrivateMessage({
@@ -597,67 +477,118 @@ class RealtimeDatabaseService {
     required String text,
   }) async {
     final chatId = privateChatId(sender.uid, recipient.uid);
-    final chatRef = db.child('privateChats/$chatId');
+    final messages = _privateMessages.putIfAbsent(chatId, () => []);
     final mutual = await mutualFollow(sender.uid, recipient.uid);
-
-    if (!mutual) {
-      final existingIntro = await chatRef
-          .child('messages')
-          .orderByChild('senderId')
-          .equalTo(sender.uid)
-          .limitToFirst(1)
-          .get();
-      if (existingIntro.exists) {
-        throw Exception(
-          'You can send one intro message. Full chat unlocks after you both follow each other.',
-        );
-      }
+    final existingIntro = messages.any(
+      (message) => message.senderId == sender.uid,
+    );
+    if (!mutual && existingIntro) {
+      throw Exception(
+        'You can send one intro message. Full chat unlocks after you both follow each other.',
+      );
     }
-
-    await chatRef.update({
-      'participants': [sender.uid, recipient.uid],
-      'participantNames': {
-        sender.uid: sender.name,
-        recipient.uid: recipient.name,
-      },
-      'updatedAt': ServerValue.timestamp,
-    });
-    await _sendMessage(chatRef.child('messages'), user: sender, text: text);
-  }
-
-  Future<void> _sendMessage(
-    DatabaseReference collection, {
-    required UserProfile user,
-    required String text,
-  }) {
-    return collection.push().set({
-      'senderId': user.uid,
-      'senderName': user.name,
-      'senderUniversity': user.university,
-      'text': text,
-      'createdAt': ServerValue.timestamp,
-    });
+    messages.add(_message(sender, text));
+    _emitPrivateMessages(chatId);
   }
 
   Stream<UserProfile?> userProfileStream(String uid) {
-    return db.child('users/$uid').onValue.map((event) {
-      if (!event.snapshot.exists) {
-        return null;
-      }
-      return UserProfile.fromSnapshot(uid, _asMap(event.snapshot.value));
-    });
+    final controller = _profileControllers.putIfAbsent(
+      uid,
+      () => StreamController<UserProfile?>.broadcast(),
+    );
+    Future.microtask(() => _emitProfile(uid));
+    return controller.stream;
   }
 
-  List<ChatMessage> _messagesFromSnapshot(DataSnapshot snapshot) {
-    final messages = snapshot.children
-        .map(
-          (child) =>
-              ChatMessage.fromSnapshot(child.key ?? '', _asMap(child.value)),
-        )
-        .toList();
-    messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    return messages;
+  ChatMessage _message(UserProfile user, String text) {
+    return ChatMessage(
+      id: _nextId('message'),
+      senderId: user.uid,
+      senderName: user.name,
+      senderUniversity: user.university,
+      text: text.trim(),
+      createdAt: DateTime.now(),
+    );
   }
+
+  void _emitAll() {
+    _authController.add(_currentUser);
+    _emitEvents();
+    _emitRequests();
+    _emitUsers();
+    _emitGlobalMessages();
+    for (final uid in _userEventControllers.keys) {
+      _emitUserEvents(uid);
+    }
+    for (final uid in _followingControllers.keys) {
+      _emitFollowing(uid);
+    }
+    for (final key in _profileControllers.keys) {
+      _emitProfile(key);
+    }
+  }
+
+  void _emitEvents() {
+    final events = [..._events]..sort((a, b) => a.startAt.compareTo(b.startAt));
+    _eventsController.add(events);
+  }
+
+  void _emitRequests() {
+    final requests = [..._pendingRequests]
+      ..sort((a, b) => b.startAt.compareTo(a.startAt));
+    _requestsController.add(requests);
+  }
+
+  void _emitUsers() {
+    final users = [..._users]
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    _usersController.add(users);
+  }
+
+  void _emitGlobalMessages() {
+    _globalMessagesController.add(
+      [..._globalMessages]..sort((a, b) => a.createdAt.compareTo(b.createdAt)),
+    );
+  }
+
+  void _emitUserEvents(String uid) {
+    final reactions = [...(_userEvents[uid]?.values ?? <EventReaction>[])]
+      ..sort((a, b) => b.eventStartAt.compareTo(a.eventStartAt));
+    _userEventControllers[uid]?.add(reactions);
+  }
+
+  void _emitReaction(String uid, String eventId) {
+    _reactionControllers['$uid:$eventId']?.add(_userEvents[uid]?[eventId]);
+  }
+
+  void _emitFollowing(String uid) {
+    _followingControllers[uid]?.add({...(_following[uid] ?? {})});
+  }
+
+  void _emitFollow(String fromUid, String toUid) {
+    _followControllers['$fromUid:$toUid']?.add(
+      _following[fromUid]?.contains(toUid) ?? false,
+    );
+  }
+
+  void _emitEventMessages(String eventId) {
+    _eventMessageControllers[eventId]?.add([
+      ...(_eventMessages[eventId] ?? []),
+    ]);
+  }
+
+  void _emitPrivateMessages(String chatId) {
+    _privateMessageControllers[chatId]?.add([
+      ...(_privateMessages[chatId] ?? []),
+    ]);
+  }
+
+  void _emitProfile(String uid) {
+    final matches = _users.where((user) => user.uid == uid);
+    _profileControllers[uid]?.add(matches.isEmpty ? null : matches.first);
+  }
+
+  String _nextId(String prefix) => '$prefix-${++_idCounter}';
 }
 
 enum EventReactionType {
@@ -734,6 +665,22 @@ class CampusEvent {
 
   String get dateLabel => '${_formatDate(startAt)} - ${_formatDate(endAt)}';
 
+  CampusEvent copyWith({int? goingCount, int? interestedCount}) {
+    return CampusEvent(
+      id: id,
+      title: title,
+      university: university,
+      startAt: startAt,
+      endAt: endAt,
+      location: location,
+      category: category,
+      description: description,
+      goingCount: goingCount ?? this.goingCount,
+      interestedCount: interestedCount ?? this.interestedCount,
+      featured: featured,
+    );
+  }
+
   factory CampusEvent.fromSnapshot(String id, Map<String, dynamic> data) {
     final now = DateTime.now();
     return CampusEvent(
@@ -764,7 +711,7 @@ class CampusEvent {
       'interestedCount': interestedCount,
       'featured': featured,
       'status': 'approved',
-      'createdAt': ServerValue.timestamp,
+      'createdAt': DateTime.now().millisecondsSinceEpoch,
     };
   }
 }
@@ -827,6 +774,17 @@ class EventReaction {
   final DateTime eventStartAt;
   final EventReactionType type;
   final bool isPublic;
+
+  EventReaction copyWith({bool? isPublic}) {
+    return EventReaction(
+      eventId: eventId,
+      eventTitle: eventTitle,
+      eventUniversity: eventUniversity,
+      eventStartAt: eventStartAt,
+      type: type,
+      isPublic: isPublic ?? this.isPublic,
+    );
+  }
 
   factory EventReaction.fromSnapshot(String id, Map<String, dynamic> data) {
     final typeKey =
@@ -938,59 +896,21 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+    return StreamBuilder<UserProfile?>(
+      stream: RealtimeDatabaseService.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const LoadingScaffold(label: 'Checking account...');
         }
 
-        final user = snapshot.data;
-        if (user == null) {
+        final profile = snapshot.data;
+        if (profile == null) {
           return const AuthScreen();
-        }
-
-        return UserProfileGate(user: user);
-      },
-    );
-  }
-}
-
-class UserProfileGate extends StatefulWidget {
-  const UserProfileGate({super.key, required this.user});
-
-  final User user;
-
-  @override
-  State<UserProfileGate> createState() => _UserProfileGateState();
-}
-
-class _UserProfileGateState extends State<UserProfileGate> {
-  late final Future<void> _bootstrap;
-
-  @override
-  void initState() {
-    super.initState();
-    _bootstrap = RealtimeDatabaseService.instance
-        .ensureUserDocument(widget.user)
-        .then((_) => RealtimeDatabaseService.instance.ensureSeedEvents());
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<void>(
-      future: _bootstrap,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const LoadingScaffold(label: 'Preparing CampusLoop...');
-        }
-        if (snapshot.hasError) {
-          return SetupErrorScreen(error: snapshot.error.toString());
         }
 
         return StreamBuilder<UserProfile?>(
           stream: RealtimeDatabaseService.instance.userProfileStream(
-            widget.user.uid,
+            profile.uid,
           ),
           builder: (context, userSnapshot) {
             if (!userSnapshot.hasData) {
@@ -1098,8 +1018,6 @@ class _AuthScreenState extends State<AuthScreen> {
           password: _passwordController.text,
         );
       }
-    } on FirebaseAuthException catch (error) {
-      setState(() => _error = _friendlyAuthError(error));
     } catch (error) {
       setState(() => _error = error.toString());
     } finally {
@@ -1178,6 +1096,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                 const SizedBox(height: 12),
                                 DropdownButtonFormField<String>(
                                   initialValue: _selectedUniversity,
+                                  isExpanded: true,
                                   decoration: const InputDecoration(
                                     labelText: 'University',
                                     prefixIcon: Icon(Icons.school_outlined),
@@ -1187,7 +1106,10 @@ class _AuthScreenState extends State<AuthScreen> {
                                         in karachiUniversities)
                                       DropdownMenuItem(
                                         value: university,
-                                        child: Text(university),
+                                        child: Text(
+                                          university,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
                                   ],
                                   onChanged: (value) {
@@ -2947,20 +2869,6 @@ String? _validatePassword(String? value) {
   return null;
 }
 
-String _friendlyAuthError(FirebaseAuthException error) {
-  return switch (error.code) {
-    'email-already-in-use' => 'An account already exists for that email.',
-    'invalid-email' => 'Enter a valid email address.',
-    'weak-password' => 'Use a password with at least 6 characters.',
-    'user-not-found' => 'No account was found for that email.',
-    'wrong-password' => 'Email or password is incorrect.',
-    'invalid-credential' => 'Email or password is incorrect.',
-    'operation-not-allowed' =>
-      'Enable Email/Password sign-in in Firebase Authentication.',
-    _ => error.message ?? error.code,
-  };
-}
-
 DateTime? _parseDateInput(String value) {
   final normalized = value.trim().replaceFirst(' ', 'T');
   return DateTime.tryParse(normalized);
@@ -2980,13 +2888,6 @@ DateTime _asDate(Object? value, DateTime fallback) {
     return DateTime.tryParse(value) ?? fallback;
   }
   return fallback;
-}
-
-Map<String, dynamic> _asMap(Object? value) {
-  if (value is Map) {
-    return value.map((key, item) => MapEntry(key.toString(), item));
-  }
-  return {};
 }
 
 int _asInt(Object? value) {

@@ -1,10 +1,12 @@
-import 'package:events_app/firebase_options.dart';
+import 'package:events_app/main.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('Firebase options are configured for iOS', () {
-    final options = DefaultFirebaseOptions.ios;
-    expect(options.apiKey, isNotEmpty);
-    expect(options.projectId, 'events-app-48a05');
+  testWidgets('shows demo auth screen', (tester) async {
+    await tester.pumpWidget(const CampusLoopApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('CampusLoop'), findsOneWidget);
+    expect(find.text('Create account'), findsOneWidget);
   });
 }
